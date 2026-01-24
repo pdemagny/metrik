@@ -1,0 +1,55 @@
+image:
+  repository: ko.local/metrik
+  tag: 0.1.0
+command: ["/ko-app/metrik", "run"]
+configmap:
+  create: true
+  data:
+    metrik.yaml: |
+      verbose: true
+      debug: false
+      runInterval: "10s"
+      maxConcurrent: 10
+      requestTimeout: "5s"
+      alertThreshold: "3s"
+      maxTries: 3
+      checks:
+        - name: "liveness ok" # should always pass.
+          endpoint: "http://prod-api.prod-api.svc.cluster.local:8080/v1/.well-known/live"
+        - name: "liveness slow timeout" # should randomly timeout, with a retry mecanism. If the retries timeouts too, it will log an error and send out an alert.
+          endpoint: "http://prod-api.prod-api.svc.cluster.local:8080/v1/slow"
+          requestTimeout: "1s"
+        - name: "liveness slow warn" # should randomly be slow, and warn if it is.
+          endpoint: "http://prod-api.prod-api.svc.cluster.local:8080/v1/slow"
+          alertThreshold: "3s"
+        - name: "liveness not found" # should fail with an alert on client error but not retry.
+          endpoint: "http://prod-api.prod-api.svc.cluster.local:8080/v1/.well-known/notfound"
+        - name: "liveness connection refused" # should fail, retry and send out an alert.
+          endpoint: "http://prod-api.prod-api.svc.cluster.local:8081/v1/.well-known/live"
+          maxTries: 5
+        - name: "readiness flaky" # should randomly give a 200 or a 503 depending on an optional application status parsed from the response body.
+          endpoint: "http://prod-api.prod-api.svc.cluster.local:8080/v1/.well-known/ready"
+volumes:
+  - name: metrik-config
+    configMap:
+      name: prod-metrik
+volumeMounts:
+  - name: metrik-config
+    mountPath: "/config"
+    readOnly: true
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  seccompProfile:
+    type: RuntimeDefault
+resources:
+  requests:
+    cpu: 5m
+    memory: 32M
+  limits:
+    memory: 32M

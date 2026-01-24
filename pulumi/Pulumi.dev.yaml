@@ -1,0 +1,15 @@
+config:
+  global:debug: false
+  global:enableComponentResources: false
+  kubernetes:context: mk1
+  metrik:releases:
+    - name: api
+      namespace: api
+      chartPath: "../apps/api/deploy/chart/api/"
+      chartValuesFilePath: "../apps/api/configs/dev-values.yaml"
+      chartVersion: "0.1.0"
+    - name: metrik
+      namespace: metrik
+      chartPath: "../apps/metrik/deploy/chart/metrik/"
+      chartValuesFilePath: "../apps/metrik/configs/dev-values.yaml"
+      chartVersion: "0.1.0"

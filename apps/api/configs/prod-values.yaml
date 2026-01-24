@@ -1,0 +1,30 @@
+image:
+  repository: ko.local/api
+  tag: 0.1.0
+command: ["/ko-app/api"]
+service:
+  port: 8080
+livenessProbe:
+  httpGet:
+    path: /v1/.well-known/live
+    port: 8080
+readinessProbe:
+  httpGet:
+    path: /v1/.well-known/ready
+    port: 8080
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  seccompProfile:
+    type: RuntimeDefault
+resources:
+  requests:
+    cpu: 5m
+    memory: 32M
+  limits:
+    memory: 32M

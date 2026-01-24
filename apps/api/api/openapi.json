@@ -1,0 +1,85 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Metrik API",
+    "description": "Metrik API.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/v1/.well-known/live": {
+      "get": {
+        "tags": ["v1 api"],
+        "summary": "Liveness check",
+        "description": "Indicates if the service is running and responsive to basic HTTP requests",
+        "operationId": "getLive",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/APIResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/.well-known/ready": {
+      "get": {
+        "tags": ["v1 api"],
+        "summary": "Readyness check",
+        "description": "Indicates if service has completed its startup routines and is prepared to accept user traffic",
+        "operationId": "getReady",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Content-Type": {
+                "description": "application/json",
+                "schema": { "$ref": "#/components/schemas/APIResponse" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/APIResponse" }
+              }
+            }
+          },
+          "503": { "description": "Service Unavailable" }
+        }
+      }
+    },
+    "/v1/slow": {
+      "get": {
+        "tags": ["v1 api"],
+        "summary": "Slow endpoint",
+        "description": "Volontarily slow endpoint",
+        "operationId": "getSlow",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/APIResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "APIResponse": {
+        "type": "object",
+        "properties": {
+          "message": { "type": "string", "maxLength": 255 },
+          "reason": { "type": "string", "maxLength": 255 },
+          "status": { "type": "integer", "format": "int32", "maximum": 50 }
+        },
+        "required": ["message", "status"]
+      }
+    }
+  },
+  "tags": [{ "name": "v1 api", "description": "v1 metrik api." }]
+}
