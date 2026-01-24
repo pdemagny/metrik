@@ -1,0 +1,10 @@
+{{- if .Values.configmap.create -}}
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: {{ include "metrik.configmapName" . }}
+  labels:
+    {{- include "metrik.labels" . | nindent 4 }}
+data:
+  {{- .Values.configmap.data | toYaml | nindent 2 }}
+{{- end }}

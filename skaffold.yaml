@@ -1,0 +1,45 @@
+apiVersion: skaffold/v4beta13
+kind: Config
+metadata:
+  name: metrik
+profiles:
+  - name: dev
+    requiresAllActivations: true
+    activation:
+      - kubeContext: mk1
+        command: dev
+    build:
+      artifacts:
+        - image: api
+          context: apps/api
+          ko: {}
+          platforms:
+            - linux/arm64
+        - image: metrik
+          context: apps/metrik
+          ko: {}
+          platforms:
+            - linux/arm64
+    deploy:
+      helm:
+        releases:
+          - name: dev-api
+            namespace: dev-api
+            createNamespace: true
+            chartPath: apps/api/deploy/chart/api
+            valuesFiles:
+              - apps/api/configs/dev-values.yaml
+            version: 0.1.0
+            setValueTemplates:
+              image.repository: "{{.IMAGE_REPO_api}}"
+              image.tag: "{{.IMAGE_TAG_api}}@{{.IMAGE_DIGEST_api}}"
+          - name: dev-metrik
+            namespace: dev-metrik
+            createNamespace: true
+            chartPath: apps/metrik/deploy/chart/metrik
+            valuesFiles:
+              - apps/metrik/configs/dev-values.yaml
+            version: 0.1.0
+            setValueTemplates:
+              image.repository: "{{.IMAGE_REPO_metrik}}"
+              image.tag: "{{.IMAGE_TAG_metrik}}@{{.IMAGE_DIGEST_metrik}}"
