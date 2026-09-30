@@ -286,7 +286,7 @@ func TestStartCycleBound(t *testing.T) {
 	logger, logs := newObserved(t)
 	alert, alerts := newAlertRecorder(t)
 
-	startCycle(t.Context(), logger, cfg, alert).Wait()
+	startCycle(t.Context(), logger, cfg, make(chan bool, maxConcurrent), alert).Wait()
 
 	if got := srv.peak.Load(); got > maxConcurrent {
 		t.Errorf("peak in-flight probes = %d, want <= %d", got, maxConcurrent)
@@ -308,6 +308,34 @@ func TestStartCycleBound(t *testing.T) {
 	}
 }
 
+func TestStartCyclesShareBound(t *testing.T) {
+	t.Parallel()
+	const maxConcurrent = 2
+	srv := newSlowServer(t)
+	cfg := Config{
+		MaxConcurrent: maxConcurrent, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second,
+		Checks: checksFor(srv.URL, "a0", "a1", "a2", "a3"),
+	}
+	logger, _ := newObserved(t)
+	alert, _ := newAlertRecorder(t)
+	limiterCh := make(chan bool, maxConcurrent)
+
+	// The second cycle starts while the first one still has probes in flight.
+	first := startCycle(t.Context(), logger, cfg, limiterCh, alert)
+	second := startCycle(t.Context(), logger, cfg, limiterCh, alert)
+	first.Wait()
+	second.Wait()
+
+	if got := srv.peak.Load(); got > maxConcurrent {
+		t.Errorf("peak in-flight probes across cycles = %d, want <= %d", got, maxConcurrent)
+	}
+	for p, n := range srv.hits() {
+		if n != 2 {
+			t.Errorf("%s probed %d times, want 2 (once per cycle)", p, n)
+		}
+	}
+}
+
 func TestStartCycleAlerts(t *testing.T) {
 	t.Parallel()
 	closed := httptest.NewServer(http.NotFoundHandler())
@@ -319,7 +347,7 @@ func TestStartCycleAlerts(t *testing.T) {
 	logger, logs := newObserved(t)
 	alert, alerts := newAlertRecorder(t)
 
-	startCycle(t.Context(), logger, cfg, alert).Wait()
+	startCycle(t.Context(), logger, cfg, make(chan bool, 1), alert).Wait()
 
 	failed := logs.FilterMessage("check failed").FilterLevelExact(zapcore.ErrorLevel).All()
 	if len(failed) != 1 {
