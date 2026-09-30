@@ -309,7 +309,6 @@ func TestRunIsolatedBetweenCalls(t *testing.T) {
 }
 
 func TestRunServerErrorIsRetried(t *testing.T) {
-	t.Skip("KNOWN DEFECT KD-1: 5xx with a decodable payload is accepted without retry (constitution IV)")
 	t.Parallel()
 	srv, hits := newServer(t, func(w http.ResponseWriter, _ *http.Request, _ int32) {
 		writeText(t, w, http.StatusServiceUnavailable, `{"message":"down","status":503}`)
