@@ -144,6 +144,15 @@ In another terminal, run:
 (cd apps/metrik/ && air run)
 ```
 
+#### Lint and test
+
+Lint and test every Go module (tests run with the race detector, which needs a C compiler):
+
+```shell
+mise run lint
+mise run test
+```
+
 #### In-cluster
 
 For fast iteration and condition closer to production, you can use `skaffold` to automate the develop+deploy loop:
