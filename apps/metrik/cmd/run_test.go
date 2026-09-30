@@ -326,7 +326,6 @@ func TestStartCycleAlerts(t *testing.T) {
 }
 
 func TestReportNullBody(t *testing.T) {
-	t.Skip("KNOWN DEFECT KD-2: a JSON null payload leaves Result.Body nil and report panics (constitution IV)")
 	t.Parallel()
 	logger, logs := newObserved(t)
 	alert, alerts := newAlertRecorder(t)
@@ -342,7 +341,6 @@ func TestReportNullBody(t *testing.T) {
 }
 
 func TestReportNilResult(t *testing.T) {
-	t.Skip("KNOWN DEFECT KD-3: an unpreparable request returns a nil Result and report panics (constitution IV)")
 	t.Parallel()
 	logger, logs := newObserved(t)
 	alert, alerts := newAlertRecorder(t)

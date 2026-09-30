@@ -125,10 +125,24 @@ func startCycle(ctx context.Context, logger *zap.Logger, cfg Config, alert func(
 func report(logger *zap.Logger, alert func(zapcore.Entry) error, results *check.Result, err error, alertThreshold time.Duration) {
 	alertLogger := zap.New(logger.Core(), zap.Hooks(alert))
 	if err != nil {
-		alertLogger.Error("check failed",
+		// results is nil when the request could not even be prepared.
+		var fields []zap.Field
+		if results != nil {
+			fields = append(fields,
+				zap.Int("code", results.Code),
+				zap.Duration("duration", results.Duration),
+			)
+		}
+		alertLogger.Error("check failed", append(fields, zap.Error(err))...)
+		return
+	}
+
+	// A JSON null payload decodes to a nil body.
+	if results.Body == nil {
+		alertLogger.Error("application error",
 			zap.Int("code", results.Code),
 			zap.Duration("duration", results.Duration),
-			zap.Error(err),
+			zap.String("reason", "empty health payload"),
 		)
 		return
 	}
