@@ -56,6 +56,14 @@ func TestResolve(t *testing.T) {
 		},
 	}
 
+	t.Run("zero max tries everywhere stays bounded", func(t *testing.T) {
+		t.Parallel()
+		got := Config{}.resolve(&check.Check{})
+		if got.MaxTries != 1 {
+			t.Errorf("maxTries = %d, want 1", got.MaxTries)
+		}
+	})
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()

@@ -82,6 +82,10 @@ func (cfg Config) resolve(c *check.Check) *check.Check {
 	if c.MaxTries != 0 {
 		r.MaxTries = c.MaxTries
 	}
+	// Zero tries means unlimited retries to the backoff library; always keep them bounded.
+	if r.MaxTries == 0 {
+		r.MaxTries = 1
+	}
 	if c.RequestTimeout != 0 {
 		r.RequestTimeout = c.RequestTimeout
 	}

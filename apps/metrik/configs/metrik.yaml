@@ -4,7 +4,7 @@ runInterval: "10s"
 maxConcurrent: 10
 requestTimeout: "5s"
 alertThreshold: "3s"
-maxTries: 3
+maxTries: 3 # total attempts per check; 0 is treated as 1 so retries stay bounded.
 checks:
   # - name: "liveness ok" # should always pass.
   #   endpoint: "http://localhost:8080/v1/.well-known/live"
