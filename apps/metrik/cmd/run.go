@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"metrik/pkg/check"
 	"net/http"
 	"sync"
@@ -63,7 +62,7 @@ func NewRunCmd(ctx context.Context) *cobra.Command {
 					case <-ctx.Done():
 						return nil
 					case <-time.Tick(runConfig.RunInterval):
-						startCycle(ctx, logger, runConfig, limiterCh, notifyOnCritical)
+						startCycle(ctx, logger, runConfig, limiterCh, notifyOnCritical(logger))
 					}
 				}
 			},
@@ -197,10 +196,14 @@ func createClient(timeout time.Duration) *http.Client {
 	}
 }
 
-func notifyOnCritical(entry zapcore.Entry) error {
-	if entry.Level >= zapcore.ErrorLevel {
-		// Send a notification to Slack, PagerDuty, etc.Config.
-		fmt.Printf("ALERT! %s\n", entry.Message)
+// notifyOnCritical returns an alert hook that records an "ALERT" entry through
+// logger for every error-level entry. logger must not carry the hook itself.
+func notifyOnCritical(logger *zap.Logger) func(zapcore.Entry) error {
+	return func(entry zapcore.Entry) error {
+		if entry.Level >= zapcore.ErrorLevel {
+			// Send a notification to Slack, PagerDuty, etc.
+			logger.Info("ALERT", zap.String("alert", entry.Message))
+		}
+		return nil
 	}
-	return nil
 }
