@@ -98,6 +98,8 @@ linters:
             - github.com/cenkalti/backoff/v5
             - go.uber.org/zap
             - metrik/cmd
+            - metrik/pkg
+            - metrik/internal
             - pulumi/internal/utils
             - pulumi/pkg/helm/release
           deny:
