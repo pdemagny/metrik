@@ -81,6 +81,11 @@ func (c *Check) Run(ctx context.Context, logger *zap.Logger, client *http.Client
 			return c, backoff.Permanent(errors.New("client error"))
 		}
 
+		// Handle server errors, which are transient and retried
+		if response.StatusCode >= http.StatusInternalServerError {
+			return c, errors.New("server error")
+		}
+
 		// Parse Request Body
 		if err := json.NewDecoder(response.Body).Decode(&r.Body); err != nil {
 			logger.Error("unable to decode response", zap.Error(err))
