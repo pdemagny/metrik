@@ -56,12 +56,14 @@ func NewRunCmd(ctx context.Context) *cobra.Command {
 					}
 				})
 
+				// One limiter for the whole run, so overlapping cycles share the maxConcurrent bound.
+				limiterCh := make(chan bool, runConfig.MaxConcurrent)
 				for {
 					select {
 					case <-ctx.Done():
 						return nil
 					case <-time.Tick(runConfig.RunInterval):
-						startCycle(ctx, logger, runConfig, notifyOnCritical)
+						startCycle(ctx, logger, runConfig, limiterCh, notifyOnCritical)
 					}
 				}
 			},
@@ -92,16 +94,18 @@ func (cfg Config) resolve(c *check.Check) *check.Check {
 	return r
 }
 
-// startCycle probes every check in cfg once, with at most cfg.MaxConcurrent
-// probes in flight. It returns once the last probe has started; the returned
-// WaitGroup is done when every probe has been reported.
-func startCycle(ctx context.Context, logger *zap.Logger, cfg Config, alert func(zapcore.Entry) error) *sync.WaitGroup {
+// startCycle probes every check in cfg once, holding a slot of limiterCh for
+// each probe in flight. It returns once the last probe has started (or ctx is
+// done); the returned WaitGroup is done when every started probe has been reported.
+func startCycle(ctx context.Context, logger *zap.Logger, cfg Config, limiterCh chan bool, alert func(zapcore.Entry) error) *sync.WaitGroup {
 	wg := &sync.WaitGroup{}
-	limiterCh := make(chan bool, cfg.MaxConcurrent)
-	defer close(limiterCh)
 
 	for _, c := range cfg.Checks {
-		limiterCh <- true
+		select {
+		case limiterCh <- true:
+		case <-ctx.Done():
+			return wg
+		}
 		wg.Add(1)
 
 		chk := cfg.resolve(c)
