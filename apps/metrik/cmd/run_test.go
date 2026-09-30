@@ -361,6 +361,26 @@ func TestStartCycleAlerts(t *testing.T) {
 	}
 }
 
+func TestNotifyOnCritical(t *testing.T) {
+	t.Parallel()
+	logger, logs := newObserved(t)
+	notify := notifyOnCritical(logger)
+
+	for _, level := range []zapcore.Level{zapcore.InfoLevel, zapcore.WarnLevel, zapcore.ErrorLevel} {
+		if err := notify(zapcore.Entry{Level: level, Message: level.String() + " entry"}); err != nil {
+			t.Fatalf("notify(%s): %v", level, err)
+		}
+	}
+
+	alerts := logs.FilterMessage("ALERT").All()
+	if len(alerts) != 1 {
+		t.Fatalf("ALERT entries = %d, want 1 (error level only)", len(alerts))
+	}
+	if got := alerts[0].ContextMap()["alert"]; got != "error entry" {
+		t.Errorf("alert field = %v, want %q", got, "error entry")
+	}
+}
+
 func TestReportNullBody(t *testing.T) {
 	t.Parallel()
 	logger, logs := newObserved(t)
