@@ -61,86 +61,7 @@ func NewRunCmd(ctx context.Context) *cobra.Command {
 					case <-ctx.Done():
 						return nil
 					case <-time.Tick(runConfig.RunInterval):
-						var wg sync.WaitGroup
-						limiterCh := make(chan bool, runConfig.MaxConcurrent)
-						defer close(limiterCh)
-
-						for _, c := range runConfig.Checks {
-							limiterCh <- true
-							wg.Add(1)
-
-							var alertThreshold time.Duration
-							if c.AlertThreshold != 0 {
-								alertThreshold = c.AlertThreshold
-							} else {
-								alertThreshold = runConfig.AlertThreshold
-							}
-
-							var maxTries uint
-							if c.MaxTries != 0 {
-								maxTries = c.MaxTries
-							} else {
-								maxTries = runConfig.MaxTries
-							}
-
-							var requestTimeout time.Duration
-							if c.RequestTimeout != 0 {
-								requestTimeout = c.RequestTimeout
-							} else {
-								requestTimeout = runConfig.RequestTimeout
-							}
-
-							client := createClient(requestTimeout)
-							check := check.NewCheck(c.Name, c.Endpoint, alertThreshold, maxTries)
-							go func() {
-								defer wg.Done()
-								childlogger := logger.WithLazy(
-									zap.String("name", c.Name),
-									zap.String("endpoint", c.Endpoint),
-								)
-								childlogger.Info("check started")
-
-								results, err := check.Run(ctx, childlogger, client)
-								<-limiterCh
-
-								alertLogger := zap.New(childlogger.Core(), zap.Hooks(notifyOnCritical))
-								if err != nil {
-									alertLogger.Error("check failed",
-										zap.Int("code", results.Code),
-										zap.Duration("duration", results.Duration),
-										zap.Error(err),
-									)
-									return
-								}
-
-								if results.Body.Status != http.StatusOK {
-									alertLogger.Error("application error",
-										zap.Int("code", results.Code),
-										zap.Duration("duration", results.Duration),
-										zap.Int("status", results.Body.Status),
-										zap.String("message", results.Body.Message),
-										zap.String("reason", results.Body.Reason),
-									)
-									return
-								}
-
-								if results.Duration > alertThreshold {
-									childlogger.Warn("slow response",
-										zap.Int("code", results.Code),
-										zap.Duration("duration", results.Duration))
-								}
-
-								childlogger.Info("check completed",
-									zap.Int("code", results.Code),
-									zap.Duration("duration", results.Duration),
-								)
-
-							}()
-						}
-
-						go func() {
-							wg.Wait()
-						}()
+						startCycle(ctx, logger, runConfig, notifyOnCritical)
 					}
 				}
 			},
@@ -148,6 +69,91 @@ func NewRunCmd(ctx context.Context) *cobra.Command {
 	)
 
 	return runCmd
+}
+
+// resolve returns a copy of c whose AlertThreshold, MaxTries and RequestTimeout
+// fall back to the global value when unset (zero) on the check.
+func (cfg Config) resolve(c *check.Check) *check.Check {
+	r := check.NewCheck(c.Name, c.Endpoint, cfg.AlertThreshold, cfg.MaxTries)
+	r.RequestTimeout = cfg.RequestTimeout
+	if c.AlertThreshold != 0 {
+		r.AlertThreshold = c.AlertThreshold
+	}
+	if c.MaxTries != 0 {
+		r.MaxTries = c.MaxTries
+	}
+	if c.RequestTimeout != 0 {
+		r.RequestTimeout = c.RequestTimeout
+	}
+	return r
+}
+
+// startCycle probes every check in cfg once, with at most cfg.MaxConcurrent
+// probes in flight. It returns once the last probe has started; the returned
+// WaitGroup is done when every probe has been reported.
+func startCycle(ctx context.Context, logger *zap.Logger, cfg Config, alert func(zapcore.Entry) error) *sync.WaitGroup {
+	wg := &sync.WaitGroup{}
+	limiterCh := make(chan bool, cfg.MaxConcurrent)
+	defer close(limiterCh)
+
+	for _, c := range cfg.Checks {
+		limiterCh <- true
+		wg.Add(1)
+
+		chk := cfg.resolve(c)
+		client := createClient(chk.RequestTimeout)
+		go func() {
+			defer wg.Done()
+			childlogger := logger.WithLazy(
+				zap.String("name", c.Name),
+				zap.String("endpoint", c.Endpoint),
+			)
+			childlogger.Info("check started")
+
+			results, err := chk.Run(ctx, childlogger, client)
+			<-limiterCh
+
+			report(childlogger, alert, results, err, chk.AlertThreshold)
+		}()
+	}
+
+	return wg
+}
+
+// report logs the outcome of one probe at the right severity and routes
+// error-level entries through alert.
+func report(logger *zap.Logger, alert func(zapcore.Entry) error, results *check.Result, err error, alertThreshold time.Duration) {
+	alertLogger := zap.New(logger.Core(), zap.Hooks(alert))
+	if err != nil {
+		alertLogger.Error("check failed",
+			zap.Int("code", results.Code),
+			zap.Duration("duration", results.Duration),
+			zap.Error(err),
+		)
+		return
+	}
+
+	if results.Body.Status != http.StatusOK {
+		alertLogger.Error("application error",
+			zap.Int("code", results.Code),
+			zap.Duration("duration", results.Duration),
+			zap.Int("status", results.Body.Status),
+			zap.String("message", results.Body.Message),
+			zap.String("reason", results.Body.Reason),
+		)
+		return
+	}
+
+	if results.Duration > alertThreshold {
+		logger.Warn("slow response",
+			zap.Int("code", results.Code),
+			zap.Duration("duration", results.Duration))
+	}
+
+	logger.Info("check completed",
+		zap.Int("code", results.Code),
+		zap.Duration("duration", results.Duration),
+	)
 }
 
 func createClient(timeout time.Duration) *http.Client {
