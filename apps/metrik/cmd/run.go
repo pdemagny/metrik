@@ -70,22 +70,21 @@ func NewRunCmd(ctx context.Context, logger *zap.Logger) *cobra.Command {
 // resolve returns a copy of c whose AlertThreshold, MaxTries and RequestTimeout
 // fall back to the global value when unset (zero) on the check.
 func (cfg Config) resolve(c *check.Check) *check.Check {
-	r := check.NewCheck(c.Name, c.Endpoint, cfg.AlertThreshold, cfg.MaxTries)
-	r.RequestTimeout = cfg.RequestTimeout
-	if c.AlertThreshold != 0 {
-		r.AlertThreshold = c.AlertThreshold
+	r := *c
+	if r.AlertThreshold == 0 {
+		r.AlertThreshold = cfg.AlertThreshold
 	}
-	if c.MaxTries != 0 {
-		r.MaxTries = c.MaxTries
+	if r.MaxTries == 0 {
+		r.MaxTries = cfg.MaxTries
 	}
 	// Zero tries means unlimited retries to the backoff library; always keep them bounded.
 	if r.MaxTries == 0 {
 		r.MaxTries = 1
 	}
-	if c.RequestTimeout != 0 {
-		r.RequestTimeout = c.RequestTimeout
+	if r.RequestTimeout == 0 {
+		r.RequestTimeout = cfg.RequestTimeout
 	}
-	return r
+	return &r
 }
 
 // startCycle probes every check in cfg once, holding a slot of limiterCh for

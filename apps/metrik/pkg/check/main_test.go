@@ -136,7 +136,7 @@ func TestRunVerdicts(t *testing.T) {
 				tt.handler(t, w, r)
 			})
 
-			res, err := probe(t, NewCheck("test", srv.URL, time.Second, tt.maxTries), time.Second)
+			res, err := probe(t, &Check{Name: "test", Endpoint: srv.URL, AlertThreshold: time.Second, MaxTries: tt.maxTries}, time.Second)
 
 			switch {
 			case tt.wantErr == "" && err != nil:
@@ -170,7 +170,7 @@ func TestRunConnectionRefused(t *testing.T) {
 
 	core, logs := observer.New(zap.DebugLevel)
 
-	res, err := NewCheck("test", url, time.Second, 2).Run(t.Context(), zap.New(core), &http.Client{Timeout: time.Second})
+	res, err := (&Check{Name: "test", Endpoint: url, AlertThreshold: time.Second, MaxTries: 2}).Run(t.Context(), zap.New(core), &http.Client{Timeout: time.Second})
 
 	if !errors.Is(err, syscall.ECONNREFUSED) {
 		t.Fatalf("error = %v, want connection refused", err)
@@ -190,7 +190,7 @@ func TestRunTimeout(t *testing.T) {
 		<-r.Context().Done()
 	})
 
-	_, err := probe(t, NewCheck("test", srv.URL, time.Second, 2), 50*time.Millisecond)
+	_, err := probe(t, &Check{Name: "test", Endpoint: srv.URL, AlertThreshold: time.Second, MaxTries: 2}, 50*time.Millisecond)
 
 	var ne net.Error
 	if !errors.As(err, &ne) || !ne.Timeout() {
@@ -211,7 +211,7 @@ func TestRunRecoversBeforeLimit(t *testing.T) {
 		writeOK(t, w)
 	})
 
-	res, err := probe(t, NewCheck("test", srv.URL, time.Second, 3), time.Second)
+	res, err := probe(t, &Check{Name: "test", Endpoint: srv.URL, AlertThreshold: time.Second, MaxTries: 3}, time.Second)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestRunRetryAfter(t *testing.T) {
 		writeOK(t, w)
 	})
 
-	_, err := probe(t, NewCheck("test", srv.URL, time.Second, 3), time.Second)
+	_, err := probe(t, &Check{Name: "test", Endpoint: srv.URL, AlertThreshold: time.Second, MaxTries: 3}, time.Second)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -265,7 +265,7 @@ func TestRunStopsOnCancel(t *testing.T) {
 	})
 
 	start := time.Now()
-	_, err := NewCheck("test", srv.URL, time.Second, 10).Run(ctx, zap.NewNop(), &http.Client{Timeout: time.Second})
+	_, err := (&Check{Name: "test", Endpoint: srv.URL, AlertThreshold: time.Second, MaxTries: 10}).Run(ctx, zap.NewNop(), &http.Client{Timeout: time.Second})
 	elapsed := time.Since(start)
 
 	if !errors.Is(err, context.Canceled) {
@@ -289,7 +289,7 @@ func TestRunIsolatedBetweenCalls(t *testing.T) {
 		}
 		writeText(t, w, http.StatusNotFound, "not found")
 	})
-	c := NewCheck("test", srv.URL, time.Second, 1)
+	c := &Check{Name: "test", Endpoint: srv.URL, AlertThreshold: time.Second, MaxTries: 1}
 
 	first, err := probe(t, c, time.Second)
 	if err != nil {
@@ -314,7 +314,7 @@ func TestRunServerErrorIsRetried(t *testing.T) {
 		writeText(t, w, http.StatusServiceUnavailable, `{"message":"down","status":503}`)
 	})
 
-	_, err := probe(t, NewCheck("test", srv.URL, time.Second, 3), time.Second)
+	_, err := probe(t, &Check{Name: "test", Endpoint: srv.URL, AlertThreshold: time.Second, MaxTries: 3}, time.Second)
 
 	if err == nil {
 		t.Error("expected an error, got nil")
