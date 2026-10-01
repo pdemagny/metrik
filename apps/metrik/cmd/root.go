@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	loggerctx "metrik/internal/context"
 	logger "metrik/internal/logger"
 
 	"github.com/spf13/cobra"
@@ -30,11 +29,8 @@ func Execute() {
 	zap.RedirectStdLog(logger)
 
 	// Context
-	ctx := loggerctx.NewContextWithLogger(context.Background(), logger)
-	ctx, cancel := context.WithCancel(ctx)
-	defer func() {
-		cancel()
-	}()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Config
 	rootConfig.SetConfigType("yaml")
@@ -65,7 +61,7 @@ func Execute() {
 	}
 
 	// Commands
-	rootCmd.AddCommand(NewRunCmd(ctx))
+	rootCmd.AddCommand(NewRunCmd(ctx, logger))
 	rootCmd.AddCommand(NewVersionCmd())
 
 	cobra.CheckErr(rootCmd.Execute())
