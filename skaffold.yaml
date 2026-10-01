@@ -17,7 +17,8 @@ profiles:
             - linux/arm64
         - image: metrik
           context: apps/metrik
-          ko: {}
+          ko:
+            main: ./cmd/metrik
           platforms:
             - linux/arm64
     deploy:

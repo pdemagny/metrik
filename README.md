@@ -161,7 +161,7 @@ In a terminal, run:
 In another terminal, run:
 
 ```shell
-(cd apps/metrik/ && air run)
+(cd apps/metrik/ && air)
 ```
 
 #### Lint and test

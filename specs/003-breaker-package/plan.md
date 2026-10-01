@@ -98,6 +98,11 @@ specs/002-endpoint-circuit-breaker/
 
 ## Complexity Tracking
 
+> **Resolved** (Constitution v1.2.0): the follow-up refactor moved `Config`/`Validate`/`Resolve` to
+> `apps/metrik/internal/config`, `startCycle`/`report`/`notifyOnCritical` and the run loop to
+> `apps/metrik/internal/runner`, and `createClient` to `pkg/check.NewClient`. The commands now live
+> in `apps/metrik/cmd/metrik`. The row below is kept as history.
+
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |---|---|---|
 | Constitution I v1.1.0 ("`cmd` MUST contain only CLI code"): these remain in `apps/metrik/cmd/run.go`: `Config.validate`, `Config.resolve`, `startCycle`, `report`, `createClient`, `notifyOnCritical`, and the settings part of `Config` | The maintainer scoped this feature to the breaker only (spec FR-006, Q1: C). Moving the scheduler, reporting, HTTP client and alert hook means splitting the roughly 700-line `run_test.go` and designing new exported APIs for the run loop. | Doing it here would turn a low-risk move into a redesign. It is deferred to a follow-up feature seeded from this list. The constitution's Sync Impact Report lists the same items. |
