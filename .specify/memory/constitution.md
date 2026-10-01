@@ -1,30 +1,3 @@
-<!--
-Sync Impact Report
-==================
-Version change: (unversioned template) → 1.0.0
-Bump rationale: initial ratification; every placeholder replaced with concrete governance.
-
-Modified principles (template slot → title):
-- [PRINCIPLE_1_NAME] → I. Simplicity First
-- [PRINCIPLE_2_NAME] → II. Configuration Over Code
-- [PRINCIPLE_3_NAME] → III. Observable by Default
-- [PRINCIPLE_4_NAME] → IV. Resilient, Bounded Checking
-- [PRINCIPLE_5_NAME] → V. Declarative, Reproducible Delivery
-
-Added sections:
-- Technology & Deployment Constraints (was [SECTION_2_NAME])
-- Development Workflow & Quality Gates (was [SECTION_3_NAME])
-- Governance (filled)
-
-Removed sections: none
-
-Dependent artifacts: templates read this file at runtime; none modified.
-
-Follow-up TODOs:
-- No `*_test.go` files exist yet; the testing gate in "Development Workflow & Quality Gates"
-  applies to new and changed logic from this version onward.
--->
-
 # Metrik Constitution
 
 ## Core Principles
@@ -37,9 +10,16 @@ Follow-up TODOs:
   do not exist yet (YAGNI).
 - Each app (`apps/api`, `apps/metrik`) and the IaC (`pulumi/`) remain independent Go modules;
   shared code across them MUST NOT be introduced without an amendment-level justification.
+- Within an app, the `cmd` package MUST contain only CLI code: command definitions, flag and
+  configuration wiring, and run start-up and shutdown. Health-checking logic (probing, scheduling,
+  reporting, alerting, circuit breaking, settings resolution and validation) MUST live in `pkg/`,
+  or in `internal/` when it is not meant to be imported.
+- Moving logic out of `cmd` into a library package is not a speculative abstraction. Such a package
+  is allowed even when `cmd` is its only caller. It MUST NOT import `cmd`.
 
 Rationale: Metrik is a small health-check system; every added layer costs more in review and
-maintenance than it returns at this scale.
+maintenance than it returns at this scale. The `cmd`/library split is not an extra layer but the
+project's fixed layout: it keeps logic testable without the CLI and easy to find.
 
 ### II. Configuration Over Code
 
@@ -119,4 +99,4 @@ Rationale: dev and prod must be reproducible from the repository alone.
 - Every plan (`/speckit-plan`) MUST include a Constitution Check; any violation MUST be recorded
   with justification in the plan's Complexity Tracking, or the design changed.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-30 | **Last Amended**: 2026-09-30
+**Version**: 1.1.0 | **Ratified**: 2026-09-30 | **Last Amended**: 2026-10-01
