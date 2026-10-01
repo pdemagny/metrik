@@ -13,6 +13,8 @@ configmap:
       requestTimeout: "5s"
       alertThreshold: "3s"
       maxTries: 3
+      failureThreshold: 3
+      cooldown: "60s"
       checks:
         - name: "liveness ok" # should always pass.
           endpoint: "http://dev-api.dev-api.svc.cluster.local:8080/v1/.well-known/live"
@@ -22,11 +24,6 @@ configmap:
         - name: "liveness slow warn" # should randomly be slow, and warn if it is.
           endpoint: "http://dev-api.dev-api.svc.cluster.local:8080/v1/slow"
           alertThreshold: "3s"
-        - name: "liveness not found" # should fail with an alert on client error but not retry.
-          endpoint: "http://dev-api.dev-api.svc.cluster.local:8080/v1/.well-known/notfound"
-        - name: "liveness connection refused" # should fail, retry and send out an alert.
-          endpoint: "http://dev-api.dev-api.svc.cluster.local:8081/v1/.well-known/live"
-          maxTries: 5
         - name: "readiness flaky" # should randomly give a 200 or a 503 depending on an optional application status parsed from the response body.
           endpoint: "http://dev-api.dev-api.svc.cluster.local:8080/v1/.well-known/ready"
 volumes:

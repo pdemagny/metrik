@@ -323,3 +323,37 @@ func TestRunServerErrorIsRetried(t *testing.T) {
 		t.Errorf("attempts = %d, want 3", got)
 	}
 }
+
+func TestID(t *testing.T) {
+	t.Parallel()
+	base := Check{Name: "api", Endpoint: "http://api/live"}
+
+	tests := []struct {
+		name  string
+		other Check
+		equal bool
+	}{
+		{name: "same name and endpoint", other: Check{Name: "api", Endpoint: "http://api/live"}, equal: true},
+		{name: "settings do not matter", other: Check{Name: "api", Endpoint: "http://api/live", MaxTries: 5}, equal: true},
+		{name: "different endpoint", other: Check{Name: "api", Endpoint: "http://api/ready"}},
+		{name: "different name", other: Check{Name: "web", Endpoint: "http://api/live"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := base.ID() == tt.other.ID(); got != tt.equal {
+				t.Errorf("ID equal = %t, want %t (%q vs %q)", got, tt.equal, base.ID(), tt.other.ID())
+			}
+		})
+	}
+
+	t.Run("NUL inside a field collides", func(t *testing.T) {
+		t.Parallel()
+		// Accepted: check names and URLs never contain NUL, so the separator cannot be forged in practice.
+		a := Check{Name: "a\x00b", Endpoint: "c"}
+		b := Check{Name: "a", Endpoint: "b\x00c"}
+		if a.ID() != b.ID() {
+			t.Errorf("IDs differ: %q vs %q", a.ID(), b.ID())
+		}
+	})
+}
