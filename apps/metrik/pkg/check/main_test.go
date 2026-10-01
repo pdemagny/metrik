@@ -179,7 +179,7 @@ func TestRunConnectionRefused(t *testing.T) {
 		t.Errorf("code = %d, want 0", res.Code)
 	}
 	// A refused dial never reaches a server, so attempts are counted from the per-attempt log.
-	if got := logs.FilterMessage("connection was refused").Len(); got != 2 {
+	if got := logs.FilterMessage("unable to perform check").Len(); got != 2 {
 		t.Errorf("attempts = %d, want 2", got)
 	}
 }
