@@ -72,16 +72,16 @@ func routes(grp *fizz.RouterGroup) {
 	}, tonic.Handler(getReady, http.StatusOK))
 }
 
-func getLive(c *gin.Context) (*APIResponse, error) {
+func getLive(_ *gin.Context) (*APIResponse, error) {
 	return &APIResponse{Message: "liveness", Status: http.StatusOK}, nil
 }
 
-func getSlow(c *gin.Context) (*APIResponse, error) {
+func getSlow(_ *gin.Context) (*APIResponse, error) {
 	time.Sleep(time.Duration(rand.IntN(5)) * time.Second)
 	return &APIResponse{Message: "slow", Status: http.StatusOK}, nil
 }
 
-func getReady(c *gin.Context) (*APIResponse, error) {
+func getReady(_ *gin.Context) (*APIResponse, error) {
 	reason := ""
 	status := http.StatusOK
 	if !mayhem() {

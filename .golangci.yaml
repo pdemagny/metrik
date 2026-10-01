@@ -96,6 +96,8 @@ linters:
             - github.com/spf13/pflag
             - github.com/spf13/viper
             - github.com/cenkalti/backoff/v5
+            - github.com/fsnotify/fsnotify
+            - github.com/kr/pretty
             - go.uber.org/zap
             - metrik/cmd
             - metrik/pkg
@@ -138,6 +140,7 @@ linters:
         - io/ioutil.ReadFile
         - io.Copy(*bytes.Buffer)
         - io.Copy(os.Stdout)
+        - (*go.uber.org/zap.Logger).Sync # Syncing stdout returns EINVAL/ENOTTY; nothing to act on.
     govet:
       disable:
         - fieldalignment # I'm ok to waste some bytes

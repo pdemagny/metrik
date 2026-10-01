@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	logger "metrik/internal/logger"
+	log "metrik/internal/logger"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -24,8 +24,8 @@ var (
 
 func Execute() {
 	// Logger
-	logger := logger.CreateLogger()
-	defer logger.Sync() //nolint:errcheck
+	logger := log.CreateLogger()
+	defer logger.Sync()
 	zap.RedirectStdLog(logger)
 
 	// Context

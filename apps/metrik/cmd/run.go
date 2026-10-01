@@ -3,10 +3,11 @@ package cmd
 import (
 	"context"
 	"crypto/tls"
-	"metrik/pkg/check"
 	"net/http"
 	"sync"
 	"time"
+
+	"metrik/pkg/check"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
@@ -28,41 +29,39 @@ type (
 )
 
 func NewRunCmd(ctx context.Context, logger *zap.Logger) *cobra.Command {
-	var (
-		runCmd = &cobra.Command{
-			Use:     "run",
-			Aliases: []string{"r"},
-			Short:   "Run health checks.",
-			Long:    "Run health checks.",
-			Args:    cobra.NoArgs,
-			RunE: func(cmd *cobra.Command, args []string) error {
-				var runConfig Config
+	runCmd := &cobra.Command{
+		Use:     "run",
+		Aliases: []string{"r"},
+		Short:   "Run health checks.",
+		Long:    "Run health checks.",
+		Args:    cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			var runConfig Config
+			err := rootConfig.Unmarshal(&runConfig)
+			if err != nil {
+				logger.Fatal("unable to decode into struct", zap.Error(err))
+			}
+			rootConfig.WatchConfig()
+			rootConfig.OnConfigChange(func(_ fsnotify.Event) {
+				logger.Debug("reloading config ...")
 				err := rootConfig.Unmarshal(&runConfig)
 				if err != nil {
 					logger.Fatal("unable to decode into struct", zap.Error(err))
 				}
-				rootConfig.WatchConfig()
-				rootConfig.OnConfigChange(func(in fsnotify.Event) {
-					logger.Debug("reloading config ...")
-					err := rootConfig.Unmarshal(&runConfig)
-					if err != nil {
-						logger.Fatal("unable to decode into struct", zap.Error(err))
-					}
-				})
+			})
 
-				// One limiter for the whole run, so overlapping cycles share the maxConcurrent bound.
-				limiterCh := make(chan bool, runConfig.MaxConcurrent)
-				for {
-					select {
-					case <-ctx.Done():
-						return nil
-					case <-time.Tick(runConfig.RunInterval):
-						startCycle(ctx, logger, runConfig, limiterCh, notifyOnCritical(logger))
-					}
+			// One limiter for the whole run, so overlapping cycles share the maxConcurrent bound.
+			limiterCh := make(chan bool, runConfig.MaxConcurrent)
+			for {
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-time.Tick(runConfig.RunInterval):
+					startCycle(ctx, logger, runConfig, limiterCh, notifyOnCritical(logger))
 				}
-			},
-		}
-	)
+			}
+		},
+	}
 
 	return runCmd
 }
@@ -129,7 +128,8 @@ func report(logger *zap.Logger, alert func(zapcore.Entry) error, results *check.
 		// results is nil when the request could not even be prepared.
 		var fields []zap.Field
 		if results != nil {
-			fields = append(fields,
+			fields = append(
+				fields,
 				zap.Int("code", results.Code),
 				zap.Duration("duration", results.Duration),
 			)
@@ -140,7 +140,8 @@ func report(logger *zap.Logger, alert func(zapcore.Entry) error, results *check.
 
 	// A JSON null payload decodes to a nil body.
 	if results.Body == nil {
-		alertLogger.Error("application error",
+		alertLogger.Error(
+			"application error",
 			zap.Int("code", results.Code),
 			zap.Duration("duration", results.Duration),
 			zap.String("reason", "empty health payload"),
@@ -149,7 +150,8 @@ func report(logger *zap.Logger, alert func(zapcore.Entry) error, results *check.
 	}
 
 	if results.Body.Status != http.StatusOK {
-		alertLogger.Error("application error",
+		alertLogger.Error(
+			"application error",
 			zap.Int("code", results.Code),
 			zap.Duration("duration", results.Duration),
 			zap.Int("status", results.Body.Status),
@@ -165,7 +167,8 @@ func report(logger *zap.Logger, alert func(zapcore.Entry) error, results *check.
 			zap.Duration("duration", results.Duration))
 	}
 
-	logger.Info("check completed",
+	logger.Info(
+		"check completed",
 		zap.Int("code", results.Code),
 		zap.Duration("duration", results.Duration),
 	)
@@ -180,7 +183,7 @@ func createClient(timeout time.Duration) *http.Client {
 			MaxIdleConns:        10,
 			MaxIdleConnsPerHost: 2,
 		},
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 		Timeout: timeout,
