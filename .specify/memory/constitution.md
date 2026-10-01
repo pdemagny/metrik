@@ -10,12 +10,14 @@
   do not exist yet (YAGNI).
 - Each app (`apps/api`, `apps/metrik`) and the IaC (`pulumi/`) remain independent Go modules;
   shared code across them MUST NOT be introduced without an amendment-level justification.
-- Within an app, the `cmd` package MUST contain only CLI code: command definitions, flag and
-  configuration wiring, and run start-up and shutdown. Health-checking logic (probing, scheduling,
-  reporting, alerting, circuit breaking, settings resolution and validation) MUST live in `pkg/`,
-  or in `internal/` when it is not meant to be imported.
-- Moving logic out of `cmd` into a library package is not a speculative abstraction. Such a package
-  is allowed even when `cmd` is its only caller. It MUST NOT import `cmd`.
+- Each app's `cmd/<app>/` directory (golang-standards/project-layout) MUST contain only `main` and
+  the commands themselves: command definitions, flag and configuration wiring, and run start-up and
+  shutdown. All other logic (probing, scheduling, reporting, alerting, circuit breaking, settings
+  resolution and validation, HTTP routing) MUST live in `internal/` when it is specific to the app,
+  or in `pkg/` when it is reusable.
+- Moving logic out of `cmd/<app>/` into a library package is not a speculative abstraction. Such a
+  package is allowed even when `cmd/<app>/` is its only caller. Library packages MUST NOT import
+  anything under `cmd/`.
 
 Rationale: Metrik is a small health-check system; every added layer costs more in review and
 maintenance than it returns at this scale. The `cmd`/library split is not an extra layer but the
@@ -68,6 +70,9 @@ Rationale: dev and prod must be reproducible from the repository alone.
 ## Technology & Deployment Constraints
 
 - Language: Go (version pinned in `.mise.toml`) for apps and IaC.
+- Repository layout: each app follows golang-standards/project-layout: `cmd/<app>/` (entry point
+  and commands), `internal/` (app-specific packages), `pkg/` (reusable packages), `api/` (API
+  contracts), `configs/` (configuration), and `deploy/` (Helm chart).
 - CLI: `cobra`; logging: `zap`; HTTP API contract: OpenAPI spec at `apps/api/api/openapi.json`,
   which MUST be updated in the same change as any API route or payload change.
 - Packaging: `ko` images, Helm charts; orchestration: Kubernetes (minikube `mk1` = dev,
@@ -99,4 +104,4 @@ Rationale: dev and prod must be reproducible from the repository alone.
 - Every plan (`/speckit-plan`) MUST include a Constitution Check; any violation MUST be recorded
   with justification in the plan's Complexity Tracking, or the design changed.
 
-**Version**: 1.1.0 | **Ratified**: 2026-09-30 | **Last Amended**: 2026-10-01
+**Version**: 1.2.0 | **Ratified**: 2026-09-30 | **Last Amended**: 2026-10-01
