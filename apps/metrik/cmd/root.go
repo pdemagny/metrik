@@ -9,7 +9,6 @@ import (
 	logger "metrik/internal/logger"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -17,21 +16,11 @@ import (
 var (
 	rootConfig     = viper.New()
 	debug, verbose bool
-	usageMessages  = map[string]string{
-		"debug":          "Activate debug mode, printing data structures and useful debugging messages.",
-		"verbose":        "Enable more verbose output.",
-		"runInterval":    "Interval between each check execution.",
-		"maxConcurrent":  "Maximum number of checks that can run concurrently.",
-		"requestTimeout": "Timeout for each request.",
-		"alertThreshold": "Duration after which a check is considered failed.",
-		"maxTries":       "Number of retries to do when a request fails.",
-	}
-	rootCmd = &cobra.Command{
+	rootCmd        = &cobra.Command{
 		Use:   "metrik",
 		Short: "Metrik healthchecker.",
 		Long:  "Command-Line Interface for the Metrik healthchecker.",
 	}
-	globalFlags = pflag.NewFlagSet("global", pflag.ContinueOnError)
 )
 
 func Execute() {
@@ -62,15 +51,15 @@ func Execute() {
 	}
 
 	// Flags
-	globalFlags.BoolVar(&debug, "debug", false, usageMessages["debug"])
-	globalFlags.BoolVarP(&verbose, "verbose", "v", true, usageMessages["verbose"])
-	globalFlags.DurationP("checkInterval", "i", 10*time.Second, usageMessages["checkInterval"])
-	globalFlags.IntP("maxConcurrent", "c", 10, usageMessages["maxConcurrent"])
-	globalFlags.DurationP("requestTimeout", "t", 5*time.Second, usageMessages["requestTimeout"])
-	globalFlags.DurationP("alertThreshold", "a", 3*time.Second, usageMessages["alertThreshold"])
-	globalFlags.IntP("maxTries", "m", 3, usageMessages["maxTries"])
-	rootCmd.PersistentFlags().AddFlagSet(globalFlags)
-	err = rootConfig.BindPFlags(globalFlags)
+	flags := rootCmd.PersistentFlags()
+	flags.BoolVar(&debug, "debug", false, "Activate debug mode, printing data structures and useful debugging messages.")
+	flags.BoolVarP(&verbose, "verbose", "v", true, "Enable more verbose output.")
+	flags.DurationP("runInterval", "i", 10*time.Second, "Interval between each check execution.")
+	flags.IntP("maxConcurrent", "c", 10, "Maximum number of checks that can run concurrently.")
+	flags.DurationP("requestTimeout", "t", 5*time.Second, "Timeout for each request.")
+	flags.DurationP("alertThreshold", "a", 3*time.Second, "Duration after which a check is considered failed.")
+	flags.IntP("maxTries", "m", 3, "Number of retries to do when a request fails.")
+	err = rootConfig.BindPFlags(flags)
 	if err != nil {
 		logger.Fatal("unable to bind flags", zap.Error(err))
 	}
