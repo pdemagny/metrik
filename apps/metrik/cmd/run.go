@@ -179,9 +179,6 @@ func createClient(timeout time.Duration) *http.Client {
 			},
 			MaxIdleConns:        10,
 			MaxIdleConnsPerHost: 2,
-			IdleConnTimeout:     90 * time.Second,
-			DisableCompression:  false,
-			DisableKeepAlives:   false,
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
