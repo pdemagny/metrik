@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 )
 
 func main() {
@@ -11,8 +12,9 @@ func main() {
 		log.Fatal(err)
 	}
 	srv := &http.Server{
-		Addr:    ":8080",
-		Handler: router,
+		Addr:        ":8080",
+		Handler:     router,
+		ReadTimeout: 10 * time.Second,
 	}
 	err = srv.ListenAndServe()
 	if err != nil {

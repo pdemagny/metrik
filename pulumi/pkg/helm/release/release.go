@@ -78,15 +78,17 @@ func NewRelease(opts ...options) *args {
 	for _, opt := range opts {
 		opt(&obj)
 	}
-	if obj.Debug {
-		ctx := obj.Context
-		ctx.Log.Info("helm/release.NewRelease:", nil)
-		ctx.Log.Info(pretty.Sprint(&obj.resourceArgs), nil)
-	}
 	return &obj
 }
 
 func (a *args) Create() (*component, error) {
+	if a.Debug {
+		err := a.Context.Log.Info("helm/release.NewRelease: "+pretty.Sprint(a.resourceArgs), nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Init the Component Resource
 	component := &component{}
 	componentResourceName := "metrik:helm:Release"
@@ -110,8 +112,8 @@ func (a *args) Create() (*component, error) {
 		Version:         u.Ps(a.resourceArgs.Version),
 		ValueYamlFiles:  a.resourceArgs.ValueYamlFiles,
 	}
-	releaseResourceOptions := append(a.ResourceOptions, pulumi.Aliases([]pulumi.Alias{{URN: pulumi.URN(fmt.Sprintf("urn:pulumi:%s::%s::%s::%s", a.Context.Stack(), a.Context.Project(), releaseResourceType, a.resourceArgs.Name))}}))
-	release, err := helm.NewRelease(a.Context, a.resourceArgs.Name, releaseArgs, releaseResourceOptions...)
+	a.ResourceOptions = append(a.ResourceOptions, pulumi.Aliases([]pulumi.Alias{{URN: pulumi.URN(fmt.Sprintf("urn:pulumi:%s::%s::%s::%s", a.Context.Stack(), a.Context.Project(), releaseResourceType, a.resourceArgs.Name))}}))
+	release, err := helm.NewRelease(a.Context, a.resourceArgs.Name, releaseArgs, a.ResourceOptions...)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +121,10 @@ func (a *args) Create() (*component, error) {
 
 	// Register CR Outputs
 	if a.EnableComponentResource {
-		a.Context.RegisterResourceOutputs(component, pulumi.Map{})
+		err := a.Context.RegisterResourceOutputs(component, pulumi.Map{})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return component, nil

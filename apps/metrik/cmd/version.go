@@ -13,10 +13,10 @@ var version string
 func NewVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
-		Short: "Show blobrctl version.",
-		Long:  "Show blobrctl version.",
+		Short: "Show metrik version.",
+		Long:  "Show metrik version.",
 		Args:  cobra.ExactArgs(0),
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(_ *cobra.Command, _ []string) {
 			fmt.Println(version)
 		},
 	}
