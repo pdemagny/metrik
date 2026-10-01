@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/cenkalti/backoff/v5"
@@ -46,10 +45,7 @@ func (c *Check) Run(ctx context.Context, logger *zap.Logger, client *http.Client
 	operation := func() (*Check, error) {
 		responseTime := time.Now()
 		response, err := client.Do(req.WithContext(ctx))
-		if errors.Is(err, syscall.ECONNREFUSED) {
-			logger.Error("connection was refused", zap.Error(err))
-			return c, err
-		} else if err != nil {
+		if err != nil {
 			logger.Error("unable to perform check", zap.Error(err))
 			return c, err
 		}
@@ -98,9 +94,5 @@ func (c *Check) Run(ctx context.Context, logger *zap.Logger, client *http.Client
 			)
 		}),
 	)
-	if err != nil {
-		return r, err
-	}
-
-	return r, nil
+	return r, err
 }
