@@ -33,15 +33,6 @@ type (
 	}
 )
 
-func NewCheck(name, endpoint string, alertThreshold time.Duration, maxTries uint) *Check {
-	return &Check{
-		Name:           name,
-		Endpoint:       endpoint,
-		AlertThreshold: alertThreshold,
-		MaxTries:       maxTries,
-	}
-}
-
 func (c *Check) Run(ctx context.Context, logger *zap.Logger, client *http.Client) (*Result, error) {
 	r := &Result{}
 	// Prepare the HTTP Request
