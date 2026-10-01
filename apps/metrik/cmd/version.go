@@ -11,15 +11,13 @@ import (
 var version string
 
 func NewVersionCmd() *cobra.Command {
-	testCmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "version",
 		Short: "Show blobrctl version.",
 		Long:  "Show blobrctl version.",
 		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("%s\n", version)
+			fmt.Println(version)
 		},
 	}
-
-	return testCmd
 }
