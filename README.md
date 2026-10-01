@@ -41,7 +41,19 @@ Terraform or Pulumi.
 
 ## Roadmap
 
+### Small improvements
+
+- Transform the README into a pointer to a docs/ directory, with a proper documentation for the project, with:
+  - A Proper architecture diagram
+  - A detailed explanation of the design choices.
+  - One detailed file per section of the README.
+    - The Features section shoudn't sound like a take at home assignment, but rather a list of features that the project implements.
+- This documentation should also be available as a website, using a static site generator such as Hugo or MkDocs.
+
+### Full fledged improvements
+
 - Use OpenTelemetry to measure endpoints health, and send signals data to a backend such as Prometheus.
+- Replace the alerting mechanism with a proper notification system, such as sending emails or Slack messages.
 
 ## Setup
 
@@ -138,10 +150,10 @@ A check whose probes fail `failureThreshold` cycles in a row is skipped for `coo
 probed once. If that trial succeeds, the check is probed normally again. If it fails, the check is
 skipped for another `cooldown`. Every failed probe still sends an alert; skipped cycles don't.
 
-| Setting | Flag | Environment variable | Default |
-|---|---|---|---|
-| `failureThreshold` | `--failureThreshold` | `METRIK_FAILURETHRESHOLD` | `3` |
-| `cooldown` | `--cooldown` | `METRIK_COOLDOWN` | `60s` |
+| Setting            | Flag                 | Environment variable      | Default |
+| ------------------ | -------------------- | ------------------------- | ------- |
+| `failureThreshold` | `--failureThreshold` | `METRIK_FAILURETHRESHOLD` | `3`     |
+| `cooldown`         | `--cooldown`         | `METRIK_COOLDOWN`         | `60s`   |
 
 Set `failureThreshold: 0` on a check (or globally) to probe it every cycle, without the circuit
 breaker. Negative values are rejected at startup and on config reload.
