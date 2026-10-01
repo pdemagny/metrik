@@ -4,16 +4,18 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"api/internal/router"
 )
 
 func main() {
-	router, err := NewRouter()
+	r, err := router.NewRouter()
 	if err != nil {
 		log.Fatal(err)
 	}
 	srv := &http.Server{
 		Addr:        ":8080",
-		Handler:     router,
+		Handler:     r,
 		ReadTimeout: 10 * time.Second,
 	}
 	err = srv.ListenAndServe()

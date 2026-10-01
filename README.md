@@ -155,7 +155,7 @@ For fast iteration, you can use `air` to get live reload for the two application
 In a terminal, run:
 
 ```shell
-(cd apps/api/ && air main.go)
+(cd apps/api/ && air)
 ```
 
 In another terminal, run:

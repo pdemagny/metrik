@@ -12,7 +12,8 @@ profiles:
       artifacts:
         - image: api
           context: apps/api
-          ko: {}
+          ko:
+            main: ./cmd/api
           platforms:
             - linux/arm64
         - image: metrik

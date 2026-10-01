@@ -1,4 +1,4 @@
-package main
+package router
 
 import (
 	"fmt"
@@ -23,6 +23,8 @@ type (
 	}
 )
 
+// NewRouter returns the API: health, slow and readiness endpoints under /v1,
+// and the OpenAPI document at /openapi.
 func NewRouter() (*fizz.Fizz, error) {
 	zapConfig := zap.NewProductionConfig()
 	zapConfig.DisableCaller = true
