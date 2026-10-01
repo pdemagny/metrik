@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
+	"metrik/pkg/breaker"
 	"metrik/pkg/check"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -55,6 +57,37 @@ func TestResolve(t *testing.T) {
 			alertThreshold: time.Second, maxTries: 5, requestTimeout: 2 * time.Second,
 		},
 	}
+
+	t.Run("circuit breaker settings", func(t *testing.T) {
+		t.Parallel()
+		settings := Config{FailureThreshold: 3, Cooldown: time.Minute}
+		zero, five := 0, 5
+
+		tests := []struct {
+			name      string
+			check     check.Check
+			threshold int
+			cooldown  time.Duration
+		}{
+			{name: "inherited", check: check.Check{}, threshold: 3, cooldown: time.Minute},
+			{name: "disabled", check: check.Check{FailureThreshold: &zero}, threshold: 0, cooldown: time.Minute},
+			{name: "threshold override", check: check.Check{FailureThreshold: &five}, threshold: 5, cooldown: time.Minute},
+			{name: "cooldown override", check: check.Check{Cooldown: 2 * time.Minute}, threshold: 3, cooldown: 2 * time.Minute},
+		}
+		for _, tt := range tests {
+			in := tt.check
+			got := settings.resolve(&in)
+			if got.FailureThreshold == nil || *got.FailureThreshold != tt.threshold {
+				t.Errorf("%s: failureThreshold = %v, want %d", tt.name, got.FailureThreshold, tt.threshold)
+			}
+			if in.FailureThreshold != nil && got.FailureThreshold == in.FailureThreshold {
+				t.Errorf("%s: resolved failureThreshold aliases the input pointer", tt.name)
+			}
+			if got.Cooldown != tt.cooldown {
+				t.Errorf("%s: cooldown = %s, want %s", tt.name, got.Cooldown, tt.cooldown)
+			}
+		}
+	})
 
 	t.Run("zero max tries everywhere stays bounded", func(t *testing.T) {
 		t.Parallel()
@@ -111,15 +144,13 @@ func TestExampleConfigLoads(t *testing.T) {
 		t.Errorf("verbose/debug = %t/%t, want true/false", cfg.Verbose, cfg.Debug)
 	}
 	if cfg.RunInterval != 10*time.Second || cfg.MaxConcurrent != 10 || cfg.RequestTimeout != 5*time.Second ||
-		cfg.AlertThreshold != 3*time.Second || cfg.MaxTries != 3 {
-		t.Errorf("globals = %+v, want runInterval 10s, maxConcurrent 10, requestTimeout 5s, alertThreshold 3s, maxTries 3", cfg)
+		cfg.AlertThreshold != 3*time.Second || cfg.MaxTries != 3 || cfg.FailureThreshold != 3 || cfg.Cooldown != time.Minute {
+		t.Errorf("globals = %+v, want runInterval 10s, maxConcurrent 10, requestTimeout 5s, alertThreshold 3s, maxTries 3, "+
+			"failureThreshold 3, cooldown 1m", cfg)
 	}
 
 	want := []check.Check{
 		{Name: "liveness slow warn", Endpoint: "http://localhost:8080/v1/slow", AlertThreshold: 3 * time.Second},
-		{Name: "liveness not found", Endpoint: "http://localhost:8080/v1/.well-known/notfound"},
-		// Endpoint is empty because the example config half-comments this check out.
-		{Name: "liveness connection refused"},
 	}
 	if len(cfg.Checks) != len(want) {
 		t.Fatalf("got %d checks, want %d", len(cfg.Checks), len(want))
@@ -165,6 +196,7 @@ func TestReport(t *testing.T) {
 		lines  []logLine
 		fields map[string]any // Checked on the first entry.
 		alerts int32
+		failed bool
 	}{
 		{
 			name:   "fast and healthy",
@@ -185,6 +217,7 @@ func TestReport(t *testing.T) {
 			lines:  []logLine{{"application error", zapcore.ErrorLevel}},
 			fields: map[string]any{"status": int64(http.StatusServiceUnavailable), "message": "down", "reason": "db"},
 			alerts: 1,
+			failed: true,
 		},
 		{
 			name:   "probe failed",
@@ -193,6 +226,7 @@ func TestReport(t *testing.T) {
 			lines:  []logLine{{"check failed", zapcore.ErrorLevel}},
 			fields: map[string]any{"error": "boom", "code": int64(http.StatusInternalServerError)},
 			alerts: 1,
+			failed: true,
 		},
 	}
 
@@ -202,7 +236,9 @@ func TestReport(t *testing.T) {
 			logger, logs := newObserved(t)
 			alert, alerts := newAlertRecorder(t)
 
-			report(logger, alert, tt.res, tt.err, time.Second)
+			if failed := report(logger, alert, tt.res, tt.err, time.Second); failed != tt.failed {
+				t.Errorf("failed = %t, want %t", failed, tt.failed)
+			}
 
 			entries := logs.All()
 			if len(entries) != len(tt.lines) {
@@ -280,13 +316,13 @@ func TestStartCycleBound(t *testing.T) {
 	const maxConcurrent = 2
 	srv := newSlowServer(t)
 	cfg := Config{
-		MaxConcurrent: maxConcurrent, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second,
+		MaxConcurrent: maxConcurrent, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second, FailureThreshold: 3,
 		Checks: checksFor(srv.URL, "c0", "c1", "c2", "c3", "c4", "c5"),
 	}
 	logger, logs := newObserved(t)
 	alert, alerts := newAlertRecorder(t)
 
-	startCycle(t.Context(), logger, cfg, make(chan bool, maxConcurrent), alert).Wait()
+	startCycle(t.Context(), logger, cfg, make(chan bool, maxConcurrent), breaker.New(), alert).Wait()
 
 	if got := srv.peak.Load(); got > maxConcurrent {
 		t.Errorf("peak in-flight probes = %d, want <= %d", got, maxConcurrent)
@@ -313,7 +349,7 @@ func TestStartCyclesShareBound(t *testing.T) {
 	const maxConcurrent = 2
 	srv := newSlowServer(t)
 	cfg := Config{
-		MaxConcurrent: maxConcurrent, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second,
+		MaxConcurrent: maxConcurrent, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second, FailureThreshold: 3,
 		Checks: checksFor(srv.URL, "a0", "a1", "a2", "a3"),
 	}
 	logger, _ := newObserved(t)
@@ -321,8 +357,9 @@ func TestStartCyclesShareBound(t *testing.T) {
 	limiterCh := make(chan bool, maxConcurrent)
 
 	// The second cycle starts while the first one still has probes in flight.
-	first := startCycle(t.Context(), logger, cfg, limiterCh, alert)
-	second := startCycle(t.Context(), logger, cfg, limiterCh, alert)
+	circuits := breaker.New()
+	first := startCycle(t.Context(), logger, cfg, limiterCh, circuits, alert)
+	second := startCycle(t.Context(), logger, cfg, limiterCh, circuits, alert)
 	first.Wait()
 	second.Wait()
 
@@ -341,13 +378,13 @@ func TestStartCycleAlerts(t *testing.T) {
 	closed := httptest.NewServer(http.NotFoundHandler())
 	closed.Close()
 	cfg := Config{
-		MaxConcurrent: 1, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second,
+		MaxConcurrent: 1, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second, FailureThreshold: 3,
 		Checks: []*check.Check{{Name: "down", Endpoint: closed.URL}},
 	}
 	logger, logs := newObserved(t)
 	alert, alerts := newAlertRecorder(t)
 
-	startCycle(t.Context(), logger, cfg, make(chan bool, 1), alert).Wait()
+	startCycle(t.Context(), logger, cfg, make(chan bool, 1), breaker.New(), alert).Wait()
 
 	failed := logs.FilterMessage("check failed").FilterLevelExact(zapcore.ErrorLevel).All()
 	if len(failed) != 1 {
@@ -386,7 +423,9 @@ func TestReportNullBody(t *testing.T) {
 	logger, logs := newObserved(t)
 	alert, alerts := newAlertRecorder(t)
 
-	report(logger, alert, &check.Result{Code: http.StatusOK}, nil, time.Second)
+	if !report(logger, alert, &check.Result{Code: http.StatusOK}, nil, time.Second) {
+		t.Error("failed = false, want true")
+	}
 
 	if got := logs.FilterLevelExact(zapcore.ErrorLevel).Len(); got != 1 {
 		t.Errorf("error entries = %d, want 1", got)
@@ -401,12 +440,286 @@ func TestReportNilResult(t *testing.T) {
 	logger, logs := newObserved(t)
 	alert, alerts := newAlertRecorder(t)
 
-	report(logger, alert, nil, errors.New("bad url"), time.Second)
+	if !report(logger, alert, nil, errors.New("bad url"), time.Second) {
+		t.Error("failed = false, want true")
+	}
 
 	if got := logs.FilterMessage("check failed").FilterLevelExact(zapcore.ErrorLevel).Len(); got != 1 {
 		t.Errorf("check failed entries = %d, want 1", got)
 	}
 	if got := alerts.Load(); got != 1 {
 		t.Errorf("alerts = %d, want 1", got)
+	}
+}
+
+// newHitServer answers 500 on paths for which fail reports true and a healthy
+// payload otherwise. The returned function reports the hits on a path so far.
+func newHitServer(t *testing.T, fail func(path string) bool) (srv *httptest.Server, hits func(path string) int) {
+	t.Helper()
+	var mu sync.Mutex
+	counts := map[string]int{}
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		counts[r.URL.Path]++
+		mu.Unlock()
+		if fail(r.URL.Path) {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(check.APIResponse{Message: "ok", Status: http.StatusOK}); err != nil {
+			t.Errorf("encode payload: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	hits = func(path string) int {
+		mu.Lock()
+		defer mu.Unlock()
+		return counts[path]
+	}
+	return srv, hits
+}
+
+func TestStartCycleSkipsOpenCircuit(t *testing.T) {
+	t.Parallel()
+	srv, hits := newHitServer(t, func(path string) bool { return path == "/bad" })
+	cfg := Config{
+		MaxConcurrent: 2, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second,
+		FailureThreshold: 2, Cooldown: time.Hour,
+		Checks: checksFor(srv.URL, "bad", "good"),
+	}
+	logger, logs := newObserved(t)
+	alert, _ := newAlertRecorder(t)
+	limiterCh := make(chan bool, cfg.MaxConcurrent)
+	circuits := breaker.New()
+
+	for range 3 {
+		startCycle(t.Context(), logger, cfg, limiterCh, circuits, alert).Wait()
+	}
+
+	if got := hits("/bad"); got != 2 {
+		t.Errorf("/bad hits = %d, want 2 (skipped once the circuit opened)", got)
+	}
+	if got := hits("/good"); got != 3 {
+		t.Errorf("/good hits = %d, want 3 (unaffected)", got)
+	}
+	skipped := logs.FilterMessage("check skipped").FilterLevelExact(zapcore.WarnLevel).All()
+	if len(skipped) != 1 {
+		t.Fatalf("check skipped entries = %d, want 1", len(skipped))
+	}
+	if ctx := skipped[0].ContextMap(); ctx["name"] != "bad" || ctx["circuit"] != "open" {
+		t.Errorf("check skipped fields = %v, want name=bad circuit=open", ctx)
+	}
+}
+
+func TestStartCycleSkipUsesNoSlot(t *testing.T) {
+	t.Parallel()
+	srv, _ := newHitServer(t, func(string) bool { return true })
+	cfg := Config{
+		MaxConcurrent: 1, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second,
+		FailureThreshold: 1, Cooldown: time.Hour,
+		Checks: checksFor(srv.URL, "down"),
+	}
+	logger, _ := newObserved(t)
+	alert, _ := newAlertRecorder(t)
+	limiterCh := make(chan bool, cfg.MaxConcurrent)
+	circuits := breaker.New()
+	startCycle(t.Context(), logger, cfg, limiterCh, circuits, alert).Wait() // Opens the circuit.
+
+	for len(limiterCh) < cap(limiterCh) {
+		limiterCh <- true
+	}
+	done := make(chan struct{})
+	go func() {
+		startCycle(t.Context(), logger, cfg, limiterCh, circuits, alert).Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("startCycle blocked on a full limiter for a suspended check")
+	}
+}
+
+func TestStartCycleTrialRecovers(t *testing.T) {
+	t.Parallel()
+	var healthy atomic.Bool
+	srv, hits := newHitServer(t, func(string) bool { return !healthy.Load() })
+	cfg := Config{
+		MaxConcurrent: 1, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second,
+		FailureThreshold: 1, Cooldown: 30 * time.Millisecond,
+		Checks: checksFor(srv.URL, "flaky"),
+	}
+	logger, _ := newObserved(t)
+	alert, _ := newAlertRecorder(t)
+	limiterCh := make(chan bool, cfg.MaxConcurrent)
+	circuits := breaker.New()
+	cycle := func(wantHits int, step string) {
+		t.Helper()
+		startCycle(t.Context(), logger, cfg, limiterCh, circuits, alert).Wait()
+		if got := hits("/flaky"); got != wantHits {
+			t.Fatalf("after %s: hits = %d, want %d", step, got, wantHits)
+		}
+	}
+
+	cycle(1, "first failure (opens)")
+	cycle(1, "cycle during cool-down (skipped)")
+	time.Sleep(40 * time.Millisecond)
+	cycle(2, "failed trial (reopens)")
+	time.Sleep(40 * time.Millisecond)
+	healthy.Store(true)
+	cycle(3, "successful trial (closes)")
+	cycle(4, "normal cycle")
+}
+
+func TestStartCycleCircuitLogs(t *testing.T) {
+	t.Parallel()
+	var healthy atomic.Bool
+	srv, _ := newHitServer(t, func(string) bool { return !healthy.Load() })
+	cfg := Config{
+		MaxConcurrent: 1, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second,
+		FailureThreshold: 2, Cooldown: 30 * time.Millisecond,
+		Checks: checksFor(srv.URL, "api"),
+	}
+	logger, logs := newObserved(t)
+	alert, alerts := newAlertRecorder(t)
+	limiterCh := make(chan bool, cfg.MaxConcurrent)
+	circuits := breaker.New()
+	cycle := func() { startCycle(t.Context(), logger, cfg, limiterCh, circuits, alert).Wait() }
+
+	cycle() // Fails.
+	cycle() // Fails, opens.
+	cycle() // Skipped.
+	time.Sleep(40 * time.Millisecond)
+	cycle() // Failed trial, reopens.
+	time.Sleep(40 * time.Millisecond)
+	healthy.Store(true)
+	cycle() // Successful trial, closes.
+
+	tests := []struct {
+		msg    string
+		level  zapcore.Level
+		fields map[string]any
+	}{
+		{"circuit opened", zapcore.ErrorLevel, map[string]any{
+			"circuit": "open", "failures": int64(2), "cooldown": 30 * time.Millisecond,
+		}},
+		{"check skipped", zapcore.WarnLevel, map[string]any{"circuit": "open"}},
+		{"circuit reopened", zapcore.ErrorLevel, map[string]any{"circuit": "open", "cooldown": 30 * time.Millisecond}},
+		{"circuit closed", zapcore.InfoLevel, map[string]any{"circuit": "closed"}},
+	}
+	for _, tt := range tests {
+		entries := logs.FilterMessage(tt.msg).All()
+		if len(entries) != 1 {
+			t.Errorf("%q entries = %d, want 1", tt.msg, len(entries))
+			continue
+		}
+		if entries[0].Level != tt.level {
+			t.Errorf("%q level = %s, want %s", tt.msg, entries[0].Level, tt.level)
+		}
+		ctx := entries[0].ContextMap()
+		if ctx["name"] != "api" || ctx["endpoint"] != srv.URL+"/api" {
+			t.Errorf("%q name/endpoint = %v/%v, want api/%s", tt.msg, ctx["name"], ctx["endpoint"], srv.URL+"/api")
+		}
+		for k, want := range tt.fields {
+			if ctx[k] != want {
+				t.Errorf("%q field %q = %v (%T), want %v (%T)", tt.msg, k, ctx[k], ctx[k], want, want)
+			}
+		}
+	}
+	for _, e := range logs.FilterMessage("circuit closed").All() {
+		if suspended, ok := e.ContextMap()["suspended"].(time.Duration); !ok || suspended <= 0 {
+			t.Errorf("circuit closed suspended = %v, want a positive duration", e.ContextMap()["suspended"])
+		}
+	}
+	// Only the three failed probes alert; circuit transitions never do.
+	if got := alerts.Load(); got != 3 {
+		t.Errorf("alerts = %d, want 3", got)
+	}
+}
+
+func TestValidate(t *testing.T) {
+	t.Parallel()
+	negative := -1
+
+	tests := []struct {
+		name string
+		cfg  Config
+		want []string // Substrings of the error; nil means no error.
+	}{
+		{name: "zeros and unset are valid", cfg: Config{Checks: []*check.Check{{Name: "x"}}}},
+		{
+			name: "negative global threshold",
+			cfg:  Config{FailureThreshold: -1},
+			want: []string{"failureThreshold", "must not be negative"},
+		},
+		{
+			name: "negative global cooldown",
+			cfg:  Config{Cooldown: -5 * time.Second},
+			want: []string{"cooldown", "must not be negative"},
+		},
+		{
+			name: "negative check threshold",
+			cfg:  Config{Checks: []*check.Check{{Name: "x", FailureThreshold: &negative}}},
+			want: []string{`check "x"`, "failureThreshold", "must not be negative"},
+		},
+		{
+			name: "negative check cooldown",
+			cfg:  Config{Checks: []*check.Check{{Name: "x", Cooldown: -5 * time.Second}}},
+			want: []string{`check "x"`, "cooldown", "must not be negative"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := tt.cfg.validate()
+			if tt.want == nil {
+				if err != nil {
+					t.Fatalf("validate = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("validate = nil, want an error containing %q", tt.want)
+			}
+			for _, w := range tt.want {
+				if !strings.Contains(err.Error(), w) {
+					t.Errorf("validate = %q, want it to contain %q", err, w)
+				}
+			}
+		})
+	}
+}
+
+func TestStartCycleBreakerDisabled(t *testing.T) {
+	t.Parallel()
+	srv, hits := newHitServer(t, func(string) bool { return true })
+	disabled := 0
+	cfg := Config{
+		MaxConcurrent: 1, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second,
+		FailureThreshold: 3, Cooldown: time.Hour,
+		Checks: []*check.Check{{Name: "always", Endpoint: srv.URL + "/always", FailureThreshold: &disabled}},
+	}
+	logger, logs := newObserved(t)
+	alert, alerts := newAlertRecorder(t)
+	limiterCh := make(chan bool, cfg.MaxConcurrent)
+	circuits := breaker.New()
+
+	for range 5 {
+		startCycle(t.Context(), logger, cfg, limiterCh, circuits, alert).Wait()
+	}
+
+	if got := hits("/always"); got != 5 {
+		t.Errorf("hits = %d, want 5 (probed every cycle)", got)
+	}
+	if got := alerts.Load(); got != 5 {
+		t.Errorf("alerts = %d, want 5", got)
+	}
+	for _, e := range logs.All() {
+		if strings.HasPrefix(e.Message, "circuit") || e.Message == "check skipped" {
+			t.Errorf("unexpected breaker entry %q", e.Message)
+		}
 	}
 }

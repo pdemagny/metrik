@@ -29,8 +29,14 @@ type (
 		AlertThreshold time.Duration `yaml:"alertThreshold"`
 		MaxTries       uint          `yaml:"maxTries"`
 		RequestTimeout time.Duration `yaml:"requestTimeout,omitempty"`
+		// FailureThreshold is nil to inherit the global value; 0 disables the circuit breaker.
+		FailureThreshold *int          `yaml:"failureThreshold,omitempty"`
+		Cooldown         time.Duration `yaml:"cooldown,omitempty"`
 	}
 )
+
+// ID identifies a check by name and endpoint, so a changed endpoint is a new check.
+func (c *Check) ID() string { return c.Name + "\x00" + c.Endpoint }
 
 func (c *Check) Run(ctx context.Context, logger *zap.Logger, client *http.Client) (*Result, error) {
 	r := &Result{}

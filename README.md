@@ -42,7 +42,6 @@ Terraform or Pulumi.
 ## Roadmap
 
 - Use OpenTelemetry to measure endpoints health, and send signals data to a backend such as Prometheus.
-- Add a Circuit Breaker mecanism.
 
 ## Setup
 
@@ -125,6 +124,27 @@ You need to have a Pulumi Cloud account and be authenticated.
 
 > [!IMPORTANT]
 > Throughout all this **Usage** guide, you don't have to leave the `metrik/` directory.
+
+### Configure
+
+Metrik reads `metrik.yaml` from `/config`, `./configs` or the current directory. See
+[`apps/metrik/configs/metrik.yaml`](apps/metrik/configs/metrik.yaml) for a documented example.
+Global settings can also be set with a flag or a `METRIK_`-prefixed environment variable. Checks
+can override `alertThreshold`, `maxTries`, `requestTimeout`, `failureThreshold` and `cooldown`.
+
+#### Circuit breaker
+
+A check whose probes fail `failureThreshold` cycles in a row is skipped for `cooldown`, then
+probed once. If that trial succeeds, the check is probed normally again. If it fails, the check is
+skipped for another `cooldown`. Every failed probe still sends an alert; skipped cycles don't.
+
+| Setting | Flag | Environment variable | Default |
+|---|---|---|---|
+| `failureThreshold` | `--failureThreshold` | `METRIK_FAILURETHRESHOLD` | `3` |
+| `cooldown` | `--cooldown` | `METRIK_COOLDOWN` | `60s` |
+
+Set `failureThreshold: 0` on a check (or globally) to probe it every cycle, without the circuit
+breaker. Negative values are rejected at startup and on config reload.
 
 ### Develop
 

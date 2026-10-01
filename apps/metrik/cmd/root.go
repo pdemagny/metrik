@@ -55,6 +55,8 @@ func Execute() {
 	flags.DurationP("requestTimeout", "t", 5*time.Second, "Timeout for each request.")
 	flags.DurationP("alertThreshold", "a", 3*time.Second, "Duration after which a check is considered failed.")
 	flags.IntP("maxTries", "m", 3, "Number of retries to do when a request fails.")
+	flags.Int("failureThreshold", 3, "Consecutive failed cycles before a check is suspended (0 disables the circuit breaker).")
+	flags.Duration("cooldown", 60*time.Second, "How long a suspended check is skipped before a trial probe.")
 	err = rootConfig.BindPFlags(flags)
 	if err != nil {
 		logger.Fatal("unable to bind flags", zap.Error(err))

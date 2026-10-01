@@ -5,6 +5,8 @@ maxConcurrent: 10
 requestTimeout: "5s"
 alertThreshold: "3s"
 maxTries: 3 # total attempts per check; 0 is treated as 1 so retries stay bounded.
+failureThreshold: 3 # consecutive failed cycles before a check is skipped; 0 disables the circuit breaker.
+cooldown: "60s" # how long a suspended check is skipped before one trial probe.
 checks:
   # - name: "liveness ok" # should always pass.
   #   endpoint: "http://localhost:8080/v1/.well-known/live"
@@ -14,10 +16,6 @@ checks:
   - name: "liveness slow warn" # should randomly be slow, and warn if it is.
     endpoint: "http://localhost:8080/v1/slow"
     alertThreshold: "3s"
-  - name: "liveness not found" # should fail with an alert on client error but not retry.
-    endpoint: "http://localhost:8080/v1/.well-known/notfound"
-  - name: "liveness connection refused" # should fail, retry and send out an alert.
-  #   endpoint: "http://localhost:8081/v1/.well-known/live"
-  #   maxTries: 5
+    # failureThreshold: 0 # never skip this check.
   # - name: "readiness flaky" # should randomly give a 200 or a 503 depending on an optional application status parsed from the response body.
   #   endpoint: "http://localhost:8080/v1/.well-known/ready"
