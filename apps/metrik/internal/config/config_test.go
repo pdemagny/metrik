@@ -140,7 +140,10 @@ func TestExampleConfigLoads(t *testing.T) {
 	}
 
 	want := []check.Check{
+		{Name: "liveness ok", Endpoint: "http://localhost:8080/v1/.well-known/live"},
+		{Name: "liveness slow timeout", Endpoint: "http://localhost:8080/v1/slow", RequestTimeout: time.Second},
 		{Name: "liveness slow warn", Endpoint: "http://localhost:8080/v1/slow", AlertThreshold: 3 * time.Second},
+		{Name: "readiness flaky", Endpoint: "http://localhost:8080/v1/.well-known/ready"},
 	}
 	if len(cfg.Checks) != len(want) {
 		t.Fatalf("got %d checks, want %d", len(cfg.Checks), len(want))

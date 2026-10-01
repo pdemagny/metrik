@@ -8,14 +8,14 @@ maxTries: 3 # total attempts per check; 0 is treated as 1 so retries stay bounde
 failureThreshold: 3 # consecutive failed cycles before a check is skipped; 0 disables the circuit breaker.
 cooldown: "60s" # how long a suspended check is skipped before one trial probe.
 checks:
-  # - name: "liveness ok" # should always pass.
-  #   endpoint: "http://localhost:8080/v1/.well-known/live"
-  # - name: "liveness slow timeout" # should randomly timeout, with a retry mecanism. If the retries timeouts too, it will log an error and send out an alert.
-  #   endpoint: "http://localhost:8080/v1/slow"
-  #   requestTimeout: "1s"
+  - name: "liveness ok" # should always pass.
+    endpoint: "http://localhost:8080/v1/.well-known/live"
+  - name: "liveness slow timeout" # should randomly timeout, with a retry mecanism. If the retries timeouts too, it will log an error and send out an alert.
+    endpoint: "http://localhost:8080/v1/slow"
+    requestTimeout: "1s"
   - name: "liveness slow warn" # should randomly be slow, and warn if it is.
     endpoint: "http://localhost:8080/v1/slow"
     alertThreshold: "3s"
     # failureThreshold: 0 # never skip this check.
-  # - name: "readiness flaky" # should randomly give a 200 or a 503 depending on an optional application status parsed from the response body.
-  #   endpoint: "http://localhost:8080/v1/.well-known/ready"
+  - name: "readiness flaky" # should randomly give a 200 or a 503 depending on an optional application status parsed from the response body.
+    endpoint: "http://localhost:8080/v1/.well-known/ready"
