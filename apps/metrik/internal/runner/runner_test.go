@@ -1,11 +1,9 @@
-package cmd
+package runner
 
 import (
 	"encoding/json"
 	"errors"
 	"maps"
-	"metrik/pkg/breaker"
-	"metrik/pkg/check"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,153 +12,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spf13/viper"
+	"metrik/internal/config"
+	"metrik/pkg/breaker"
+	"metrik/pkg/check"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 )
-
-func TestResolve(t *testing.T) {
-	t.Parallel()
-	global := Config{AlertThreshold: 3 * time.Second, MaxTries: 3, RequestTimeout: 5 * time.Second}
-
-	tests := []struct {
-		name           string
-		check          check.Check
-		alertThreshold time.Duration
-		maxTries       uint
-		requestTimeout time.Duration
-	}{
-		{
-			name:           "no override",
-			check:          check.Check{},
-			alertThreshold: 3 * time.Second, maxTries: 3, requestTimeout: 5 * time.Second,
-		},
-		{
-			name:           "alert threshold only",
-			check:          check.Check{AlertThreshold: time.Second},
-			alertThreshold: time.Second, maxTries: 3, requestTimeout: 5 * time.Second,
-		},
-		{
-			name:           "max tries only",
-			check:          check.Check{MaxTries: 5},
-			alertThreshold: 3 * time.Second, maxTries: 5, requestTimeout: 5 * time.Second,
-		},
-		{
-			name:           "request timeout only",
-			check:          check.Check{RequestTimeout: time.Second},
-			alertThreshold: 3 * time.Second, maxTries: 3, requestTimeout: time.Second,
-		},
-		{
-			name:           "all overridden",
-			check:          check.Check{AlertThreshold: time.Second, MaxTries: 5, RequestTimeout: 2 * time.Second},
-			alertThreshold: time.Second, maxTries: 5, requestTimeout: 2 * time.Second,
-		},
-	}
-
-	t.Run("circuit breaker settings", func(t *testing.T) {
-		t.Parallel()
-		settings := Config{FailureThreshold: 3, Cooldown: time.Minute}
-		zero, five := 0, 5
-
-		tests := []struct {
-			name      string
-			check     check.Check
-			threshold int
-			cooldown  time.Duration
-		}{
-			{name: "inherited", check: check.Check{}, threshold: 3, cooldown: time.Minute},
-			{name: "disabled", check: check.Check{FailureThreshold: &zero}, threshold: 0, cooldown: time.Minute},
-			{name: "threshold override", check: check.Check{FailureThreshold: &five}, threshold: 5, cooldown: time.Minute},
-			{name: "cooldown override", check: check.Check{Cooldown: 2 * time.Minute}, threshold: 3, cooldown: 2 * time.Minute},
-		}
-		for _, tt := range tests {
-			in := tt.check
-			got := settings.resolve(&in)
-			if got.FailureThreshold == nil || *got.FailureThreshold != tt.threshold {
-				t.Errorf("%s: failureThreshold = %v, want %d", tt.name, got.FailureThreshold, tt.threshold)
-			}
-			if in.FailureThreshold != nil && got.FailureThreshold == in.FailureThreshold {
-				t.Errorf("%s: resolved failureThreshold aliases the input pointer", tt.name)
-			}
-			if got.Cooldown != tt.cooldown {
-				t.Errorf("%s: cooldown = %s, want %s", tt.name, got.Cooldown, tt.cooldown)
-			}
-		}
-	})
-
-	t.Run("zero max tries everywhere stays bounded", func(t *testing.T) {
-		t.Parallel()
-		got := Config{}.resolve(&check.Check{})
-		if got.MaxTries != 1 {
-			t.Errorf("maxTries = %d, want 1", got.MaxTries)
-		}
-	})
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			in := tt.check
-			in.Name, in.Endpoint = "api", "http://example.test/live"
-			before := in
-
-			got := global.resolve(&in)
-
-			if got == &in {
-				t.Fatal("resolve returned the input check, want a copy")
-			}
-			if in != before {
-				t.Errorf("input check mutated: %+v, want %+v", in, before)
-			}
-			if got.Name != in.Name || got.Endpoint != in.Endpoint {
-				t.Errorf("name/endpoint = %q/%q, want %q/%q", got.Name, got.Endpoint, in.Name, in.Endpoint)
-			}
-			if got.AlertThreshold != tt.alertThreshold {
-				t.Errorf("alertThreshold = %s, want %s", got.AlertThreshold, tt.alertThreshold)
-			}
-			if got.MaxTries != tt.maxTries {
-				t.Errorf("maxTries = %d, want %d", got.MaxTries, tt.maxTries)
-			}
-			if got.RequestTimeout != tt.requestTimeout {
-				t.Errorf("requestTimeout = %s, want %s", got.RequestTimeout, tt.requestTimeout)
-			}
-		})
-	}
-}
-
-func TestExampleConfigLoads(t *testing.T) {
-	t.Parallel()
-	v := viper.New()
-	v.SetConfigFile("../configs/metrik.yaml")
-	if err := v.ReadInConfig(); err != nil {
-		t.Fatalf("read config: %v", err)
-	}
-	var cfg Config
-	if err := v.Unmarshal(&cfg); err != nil {
-		t.Fatalf("decode config: %v", err)
-	}
-
-	if !cfg.Verbose || cfg.Debug {
-		t.Errorf("verbose/debug = %t/%t, want true/false", cfg.Verbose, cfg.Debug)
-	}
-	if cfg.RunInterval != 10*time.Second || cfg.MaxConcurrent != 10 || cfg.RequestTimeout != 5*time.Second ||
-		cfg.AlertThreshold != 3*time.Second || cfg.MaxTries != 3 || cfg.FailureThreshold != 3 || cfg.Cooldown != time.Minute {
-		t.Errorf("globals = %+v, want runInterval 10s, maxConcurrent 10, requestTimeout 5s, alertThreshold 3s, maxTries 3, "+
-			"failureThreshold 3, cooldown 1m", cfg)
-	}
-
-	want := []check.Check{
-		{Name: "liveness slow warn", Endpoint: "http://localhost:8080/v1/slow", AlertThreshold: 3 * time.Second},
-	}
-	if len(cfg.Checks) != len(want) {
-		t.Fatalf("got %d checks, want %d", len(cfg.Checks), len(want))
-	}
-	for i, w := range want {
-		if *cfg.Checks[i] != w {
-			t.Errorf("checks[%d] = %+v, want %+v", i, *cfg.Checks[i], w)
-		}
-	}
-}
 
 func newObserved(t *testing.T) (*zap.Logger, *observer.ObservedLogs) {
 	t.Helper()
@@ -315,7 +174,7 @@ func TestStartCycleBound(t *testing.T) {
 	t.Parallel()
 	const maxConcurrent = 2
 	srv := newSlowServer(t)
-	cfg := Config{
+	cfg := config.Config{
 		MaxConcurrent: maxConcurrent, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second, FailureThreshold: 3,
 		Checks: checksFor(srv.URL, "c0", "c1", "c2", "c3", "c4", "c5"),
 	}
@@ -348,7 +207,7 @@ func TestStartCyclesShareBound(t *testing.T) {
 	t.Parallel()
 	const maxConcurrent = 2
 	srv := newSlowServer(t)
-	cfg := Config{
+	cfg := config.Config{
 		MaxConcurrent: maxConcurrent, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second, FailureThreshold: 3,
 		Checks: checksFor(srv.URL, "a0", "a1", "a2", "a3"),
 	}
@@ -377,7 +236,7 @@ func TestStartCycleAlerts(t *testing.T) {
 	t.Parallel()
 	closed := httptest.NewServer(http.NotFoundHandler())
 	closed.Close()
-	cfg := Config{
+	cfg := config.Config{
 		MaxConcurrent: 1, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second, FailureThreshold: 3,
 		Checks: []*check.Check{{Name: "down", Endpoint: closed.URL}},
 	}
@@ -483,7 +342,7 @@ func newHitServer(t *testing.T, fail func(path string) bool) (srv *httptest.Serv
 func TestStartCycleSkipsOpenCircuit(t *testing.T) {
 	t.Parallel()
 	srv, hits := newHitServer(t, func(path string) bool { return path == "/bad" })
-	cfg := Config{
+	cfg := config.Config{
 		MaxConcurrent: 2, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second,
 		FailureThreshold: 2, Cooldown: time.Hour,
 		Checks: checksFor(srv.URL, "bad", "good"),
@@ -515,7 +374,7 @@ func TestStartCycleSkipsOpenCircuit(t *testing.T) {
 func TestStartCycleSkipUsesNoSlot(t *testing.T) {
 	t.Parallel()
 	srv, _ := newHitServer(t, func(string) bool { return true })
-	cfg := Config{
+	cfg := config.Config{
 		MaxConcurrent: 1, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second,
 		FailureThreshold: 1, Cooldown: time.Hour,
 		Checks: checksFor(srv.URL, "down"),
@@ -546,7 +405,7 @@ func TestStartCycleTrialRecovers(t *testing.T) {
 	t.Parallel()
 	var healthy atomic.Bool
 	srv, hits := newHitServer(t, func(string) bool { return !healthy.Load() })
-	cfg := Config{
+	cfg := config.Config{
 		MaxConcurrent: 1, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second,
 		FailureThreshold: 1, Cooldown: 30 * time.Millisecond,
 		Checks: checksFor(srv.URL, "flaky"),
@@ -577,7 +436,7 @@ func TestStartCycleCircuitLogs(t *testing.T) {
 	t.Parallel()
 	var healthy atomic.Bool
 	srv, _ := newHitServer(t, func(string) bool { return !healthy.Load() })
-	cfg := Config{
+	cfg := config.Config{
 		MaxConcurrent: 1, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second,
 		FailureThreshold: 2, Cooldown: 30 * time.Millisecond,
 		Checks: checksFor(srv.URL, "api"),
@@ -639,65 +498,11 @@ func TestStartCycleCircuitLogs(t *testing.T) {
 	}
 }
 
-func TestValidate(t *testing.T) {
-	t.Parallel()
-	negative := -1
-
-	tests := []struct {
-		name string
-		cfg  Config
-		want []string // Substrings of the error; nil means no error.
-	}{
-		{name: "zeros and unset are valid", cfg: Config{Checks: []*check.Check{{Name: "x"}}}},
-		{
-			name: "negative global threshold",
-			cfg:  Config{FailureThreshold: -1},
-			want: []string{"failureThreshold", "must not be negative"},
-		},
-		{
-			name: "negative global cooldown",
-			cfg:  Config{Cooldown: -5 * time.Second},
-			want: []string{"cooldown", "must not be negative"},
-		},
-		{
-			name: "negative check threshold",
-			cfg:  Config{Checks: []*check.Check{{Name: "x", FailureThreshold: &negative}}},
-			want: []string{`check "x"`, "failureThreshold", "must not be negative"},
-		},
-		{
-			name: "negative check cooldown",
-			cfg:  Config{Checks: []*check.Check{{Name: "x", Cooldown: -5 * time.Second}}},
-			want: []string{`check "x"`, "cooldown", "must not be negative"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			err := tt.cfg.validate()
-			if tt.want == nil {
-				if err != nil {
-					t.Fatalf("validate = %v, want nil", err)
-				}
-				return
-			}
-			if err == nil {
-				t.Fatalf("validate = nil, want an error containing %q", tt.want)
-			}
-			for _, w := range tt.want {
-				if !strings.Contains(err.Error(), w) {
-					t.Errorf("validate = %q, want it to contain %q", err, w)
-				}
-			}
-		})
-	}
-}
-
 func TestStartCycleBreakerDisabled(t *testing.T) {
 	t.Parallel()
 	srv, hits := newHitServer(t, func(string) bool { return true })
 	disabled := 0
-	cfg := Config{
+	cfg := config.Config{
 		MaxConcurrent: 1, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second,
 		FailureThreshold: 3, Cooldown: time.Hour,
 		Checks: []*check.Check{{Name: "always", Endpoint: srv.URL + "/always", FailureThreshold: &disabled}},

@@ -2,6 +2,7 @@ package check
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -34,6 +35,24 @@ type (
 		Cooldown         time.Duration `yaml:"cooldown,omitempty"`
 	}
 )
+
+// NewClient returns the HTTP client probes use: TLS 1.2 or newer, redirects
+// not followed (the 3xx is the result), and timeout as the per-request limit.
+func NewClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				MinVersion: tls.VersionTLS12,
+			},
+			MaxIdleConns:        10,
+			MaxIdleConnsPerHost: 2,
+		},
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+		Timeout: timeout,
+	}
+}
 
 // ID identifies a check by name and endpoint, so a changed endpoint is a new check.
 func (c *Check) ID() string { return c.Name + "\x00" + c.Endpoint }

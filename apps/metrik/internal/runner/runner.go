@@ -1,131 +1,37 @@
-package cmd
+// Package runner probes the configured checks on every run interval, within
+// the concurrency limit, through the circuit breaker, and reports each outcome.
+package runner
 
 import (
 	"context"
-	"crypto/tls"
-	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
+	"metrik/internal/config"
 	"metrik/pkg/breaker"
 	"metrik/pkg/check"
 
-	"github.com/fsnotify/fsnotify"
-	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
-type (
-	Config struct {
-		Debug            bool           `yaml:"debug"`
-		Verbose          bool           `yaml:"verbose"`
-		RunInterval      time.Duration  `yaml:"runInterval"`
-		MaxConcurrent    int            `yaml:"maxConcurrent"`
-		RequestTimeout   time.Duration  `yaml:"requestTimeout"`
-		AlertThreshold   time.Duration  `yaml:"alertThreshold"`
-		MaxTries         uint           `yaml:"maxTries"`
-		FailureThreshold int            `yaml:"failureThreshold"`
-		Cooldown         time.Duration  `yaml:"cooldown"`
-		Checks           []*check.Check `yaml:"checks"`
-	}
-)
-
-func NewRunCmd(ctx context.Context, logger *zap.Logger) *cobra.Command {
-	runCmd := &cobra.Command{
-		Use:     "run",
-		Aliases: []string{"r"},
-		Short:   "Run health checks.",
-		Long:    "Run health checks.",
-		Args:    cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			var runConfig Config
-			err := rootConfig.Unmarshal(&runConfig)
-			if err != nil {
-				logger.Fatal("unable to decode into struct", zap.Error(err))
-			}
-			if err := runConfig.validate(); err != nil {
-				logger.Fatal("invalid config", zap.Error(err))
-			}
-			rootConfig.WatchConfig()
-			rootConfig.OnConfigChange(func(_ fsnotify.Event) {
-				logger.Debug("reloading config ...")
-				err := rootConfig.Unmarshal(&runConfig)
-				if err != nil {
-					logger.Fatal("unable to decode into struct", zap.Error(err))
-				}
-				if err := runConfig.validate(); err != nil {
-					logger.Fatal("invalid config", zap.Error(err))
-				}
-			})
-
-			// One limiter for the whole run, so overlapping cycles share the maxConcurrent bound.
-			limiterCh := make(chan bool, runConfig.MaxConcurrent)
-			// Circuit state outlives cycles and config reloads.
-			circuits := breaker.New()
-			for {
-				select {
-				case <-ctx.Done():
-					return nil
-				case <-time.Tick(runConfig.RunInterval):
-					startCycle(ctx, logger, runConfig, limiterCh, circuits, notifyOnCritical(logger))
-				}
-			}
-		},
-	}
-
-	return runCmd
-}
-
-// validate rejects settings that have no meaning, such as negative circuit
-// breaker values.
-func (cfg Config) validate() error {
-	if cfg.FailureThreshold < 0 {
-		return fmt.Errorf("failureThreshold must not be negative, got %d", cfg.FailureThreshold)
-	}
-	if cfg.Cooldown < 0 {
-		return fmt.Errorf("cooldown must not be negative, got %s", cfg.Cooldown)
-	}
-	for _, c := range cfg.Checks {
-		if c.FailureThreshold != nil && *c.FailureThreshold < 0 {
-			return fmt.Errorf("check %q: failureThreshold must not be negative, got %d", c.Name, *c.FailureThreshold)
-		}
-		if c.Cooldown < 0 {
-			return fmt.Errorf("check %q: cooldown must not be negative, got %s", c.Name, c.Cooldown)
+// Run probes the checks of current() on every run interval until ctx is done.
+// current is read on each tick, so configuration reloads apply to the next cycle.
+func Run(ctx context.Context, logger *zap.Logger, current func() config.Config) error {
+	cfg := current()
+	// One limiter for the whole run, so overlapping cycles share the maxConcurrent bound.
+	limiterCh := make(chan bool, cfg.MaxConcurrent)
+	// Circuit state outlives cycles and config reloads.
+	circuits := breaker.New()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.Tick(current().RunInterval):
+			startCycle(ctx, logger, current(), limiterCh, circuits, notifyOnCritical(logger))
 		}
 	}
-	return nil
-}
-
-// resolve returns a copy of c whose AlertThreshold, MaxTries, RequestTimeout and
-// Cooldown fall back to the global value when unset (zero) on the check, and
-// whose FailureThreshold falls back to the global value when nil.
-func (cfg Config) resolve(c *check.Check) *check.Check {
-	r := *c
-	if r.AlertThreshold == 0 {
-		r.AlertThreshold = cfg.AlertThreshold
-	}
-	if r.MaxTries == 0 {
-		r.MaxTries = cfg.MaxTries
-	}
-	// Zero tries means unlimited retries to the backoff library; always keep them bounded.
-	if r.MaxTries == 0 {
-		r.MaxTries = 1
-	}
-	if r.RequestTimeout == 0 {
-		r.RequestTimeout = cfg.RequestTimeout
-	}
-	// Always a fresh pointer, so the copy never aliases the input check.
-	threshold := cfg.FailureThreshold
-	if r.FailureThreshold != nil {
-		threshold = *r.FailureThreshold
-	}
-	r.FailureThreshold = &threshold
-	if r.Cooldown == 0 {
-		r.Cooldown = cfg.Cooldown
-	}
-	return &r
 }
 
 // startCycle probes every check in cfg once, holding a slot of limiterCh for
@@ -133,13 +39,13 @@ func (cfg Config) resolve(c *check.Check) *check.Check {
 // a slot, and every probe outcome is recorded in circuits. It returns once the
 // last probe has started (or ctx is done); the returned WaitGroup is done when
 // every started probe has been reported.
-func startCycle(ctx context.Context, logger *zap.Logger, cfg Config, limiterCh chan bool, circuits *breaker.Breaker, alert func(zapcore.Entry) error) *sync.WaitGroup {
+func startCycle(ctx context.Context, logger *zap.Logger, cfg config.Config, limiterCh chan bool, circuits *breaker.Breaker, alert func(zapcore.Entry) error) *sync.WaitGroup {
 	wg := &sync.WaitGroup{}
 
 	checks := make([]*check.Check, 0, len(cfg.Checks))
 	keys := make(map[string]struct{}, len(cfg.Checks))
 	for _, c := range cfg.Checks {
-		chk := cfg.resolve(c)
+		chk := cfg.Resolve(c)
 		checks = append(checks, chk)
 		if *chk.FailureThreshold > 0 {
 			keys[chk.ID()] = struct{}{}
@@ -172,7 +78,7 @@ func startCycle(ctx context.Context, logger *zap.Logger, cfg Config, limiterCh c
 		}
 		wg.Add(1)
 
-		client := createClient(chk.RequestTimeout)
+		client := check.NewClient(chk.RequestTimeout)
 		go func() {
 			defer wg.Done()
 			childlogger := logger.WithLazy(
@@ -267,22 +173,6 @@ func report(logger *zap.Logger, alert func(zapcore.Entry) error, results *check.
 		zap.Duration("duration", results.Duration),
 	)
 	return false
-}
-
-func createClient(timeout time.Duration) *http.Client {
-	return &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				MinVersion: tls.VersionTLS12,
-			},
-			MaxIdleConns:        10,
-			MaxIdleConnsPerHost: 2,
-		},
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-		Timeout: timeout,
-	}
 }
 
 // notifyOnCritical returns an alert hook that records an "ALERT" entry through

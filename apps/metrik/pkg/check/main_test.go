@@ -2,6 +2,7 @@ package check
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"net"
@@ -356,4 +357,39 @@ func TestID(t *testing.T) {
 			t.Errorf("IDs differ: %q vs %q", a.ID(), b.ID())
 		}
 	})
+}
+
+func TestNewClient(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/moved" {
+			http.Redirect(w, r, "/target", http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := NewClient(2 * time.Second)
+
+	if client.Timeout != 2*time.Second {
+		t.Errorf("timeout = %s, want 2s", client.Timeout)
+	}
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok || transport.TLSClientConfig == nil || transport.TLSClientConfig.MinVersion != tls.VersionTLS12 {
+		t.Errorf("transport = %#v, want an *http.Transport with TLS 1.2 minimum", client.Transport)
+	}
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/moved", http.NoBody)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusFound {
+		t.Errorf("status = %d, want %d (redirect not followed)", resp.StatusCode, http.StatusFound)
+	}
 }

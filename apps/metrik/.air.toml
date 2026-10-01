@@ -1,0 +1,5 @@
+# Live reload for local development: `air` from apps/metrik.
+[build]
+cmd = "go build -o ./tmp/main ./cmd/metrik"
+bin = "./tmp/main"
+args_bin = ["run"]
