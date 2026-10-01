@@ -8,8 +8,6 @@ import (
 	"sync"
 	"time"
 
-	loggerctx "metrik/internal/context"
-
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -29,7 +27,7 @@ type (
 	}
 )
 
-func NewRunCmd(ctx context.Context) *cobra.Command {
+func NewRunCmd(ctx context.Context, logger *zap.Logger) *cobra.Command {
 	var (
 		runCmd = &cobra.Command{
 			Use:     "run",
@@ -38,9 +36,6 @@ func NewRunCmd(ctx context.Context) *cobra.Command {
 			Long:    "Run health checks.",
 			Args:    cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, args []string) error {
-				var logger *zap.Logger
-				logger = loggerctx.LoggerFromContext(ctx)
-
 				var runConfig Config
 				err := rootConfig.Unmarshal(&runConfig)
 				if err != nil {
