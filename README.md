@@ -1,233 +1,97 @@
 # Metrik
 
-*Objective*:
-
-Create an automated health check system for a web application that verifies the application's
-availability and performance. The system should be capable of sending alerts when certain
-thresholds are exceeded, suggesting potential issues with the service.
+Metrik is an automated health checker for web applications. It probes HTTP health endpoints at a
+regular interval, measures response time and status, understands application-level health
+indicators in the response body, and raises alerts when something degrades. It ships with a demo
+API to monitor, Helm charts, and a Pulumi program to deploy everything to Kubernetes.
 
 ## Features
 
-*Requirements*:
+- **Concurrent checks**: probe any number of endpoints every cycle, bounded by a configurable
+  concurrency limit so Metrik never amplifies an outage.
+- **Layered configuration**: a YAML file, CLI flags or `METRIK_*` environment variables, with
+  per-check overrides of thresholds, timeouts and retries. File changes are applied live, without
+  a restart.
+- **Health indicators**: beyond the HTTP status, Metrik parses the JSON body of the response and
+  reports unhealthy application state, with its reason.
+- **Resilient probing**: transient failures (network errors, timeouts, 5xx) are retried with
+  exponential backoff, rate limits (`429`) honor `Retry-After`, and client errors fail fast.
+- **Circuit breaker**: endpoints that keep failing are suspended, then probed once after a
+  cooldown, to avoid hammering a service that is already down.
+- **Structured logging and alerts**: every check emits a JSON log entry with name, endpoint,
+  response time and outcome; slow responses warn, failures log an error and trigger the alert
+  hook.
+- **Safe by default**: TLS 1.2+, no redirect following, graceful shutdown, and containers running
+  as non-root with a restricted security context.
+- **Deployment included**: a Helm chart per application, images built with
+  [ko](https://ko.build), [Pulumi](https://www.pulumi.com) stacks for `dev` and `prod`, and a
+  [Skaffold](https://skaffold.dev) loop for in-cluster development.
+- **Demo API**: a small service with live, slow and flaky readiness endpoints to practice on,
+  documented with an OpenAPI spec (`apps/api/api/openapi.json`, served at `/openapi`).
 
-- ✅ Health Check Program: Write a program in Golang that performs HTTP GET requests to the
-web application's health endpoint (e.g., /health or /status). The program should run at a
-configurable interval (e.g., every 5 minutes).
-- ✅ Metrics to Collect: Response time. HTTP status code. Optionally, parse the response body for
-specific application health indicators (e.g., database connectivity status).
-- ✅ Alerting Logic: If the response time exceeds a threshold (e.g., 3 seconds), log a warning. If the
-HTTP status code is not 200, log an error. If any optional health indicators are in an error state,
-log an error.
-- ✅ Logging and Notification: Implement logging for all health checks, including timestamp,
-endpoint, response time, and status. When an error is logged, trigger a simple alert mechanism.
-This could be a mock function that simulates sending an email or posting a message to a Slack
-channel.
-- ✅ Configuration: Use a configuration file or environment variables to manage settings such as
-the health endpoint URL, check interval, and response time threshold.
-- ✅ Documentation: Provide a README file that explains how to set up, configure, and run the
-health check system. Include any dependencies that need to be installed
-- ✅ Create a helm chart to package your code.
-- ✅ Deploy your code in a kubernetes cluster (local or remote using a cloud provider, though local
-might be easier for testing) using the helm chart created before using an IaC solution such as
-Terraform or Pulumi.
+## Getting started
 
-*Bonus Points*:
+Run Metrik locally against the demo API, with live reload.
 
-- ℹ️ Containerize the health check system using Docker -(compose).
-- ✅ Implement a retry mechanism for transient failures.
-- ✅ Make the program able to check multiple endpoints in parallel, if the system needs to scale.
-- ✅ OpenAPI spec with your solution.
-- ℹ️ Whatever else you would like to add to the solution, code or deployment wise.
+### 1. Install the tools
 
-## Roadmap
-
-- Use OpenTelemetry to measure endpoints health, and send signals data to a backend such as Prometheus.
-- Replace the alerting mechanism with a proper notification system, such as sending emails or Slack messages.
-
-## Setup
-
-### Tools
-
-#### Asdf
-
-If you are an `asdf` user, run this command to install all the tools:
-
-```shell
-while IFS= read -r line; do
-    asdf plugin add "$(echo "${line}" | awk -F' ' '{print $1}')"
-    asdf install "$(echo "${line}" | awk -F' ' '{print $1}')" "$(echo "${line}" | awk -F' ' '{print $2}')"
-    asdf set "$(echo "${line}" | awk -F' ' '{print $1}')" "$(echo "${line}" | awk -F' ' '{print $2}')"
-done <.tool-versions
-```
-
-#### Mise
-
-If you are a `mise` user, run this command to install all the tools:
+With [mise](https://mise.jdx.dev):
 
 ```shell
 mise install
 ```
 
-#### Manual
+This installs every tool pinned in [`.mise.toml`](.mise.toml), including the Spec Kit CLI used by
+the [contributing guide](docs/metrik-contributing.md). Only `air` and `go` (plus a C compiler for
+the race detector) are needed for this quickstart; the rest is for deployment and documentation.
 
-You can also install tools manually, using their official instructions for your platform:
+### 2. Run the API and Metrik
 
-| Link                                                                               | Required |
-| :--------------------------------------------------------------------------------- | :------: |
-| [air](https://github.com/air-verse/air?tab=readme-ov-file#installation)            |    ✅     |
-| [dive](https://github.com/wagoodman/dive?tab=readme-ov-file#installation)          |    ❌     |
-| [golang](https://go.dev/doc/install)                                               |    ✅     |
-| [golangci-lint](https://golangci-lint.run/docs/welcome/install/local/)             |    ✅     |
-| [helm](https://helm.sh/docs/intro/install)                                         |    ✅     |
-| [k9s](https://github.com/derailed/k9s?tab=readme-ov-file#installation)             |    ✅     |
-| [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)               |    ✅     |
-| [ko](https://github.com/ko-build/ko?tab=readme-ov-file#install-ko-and-get-started) |    ✅     |
-| [kubectl](https://kubernetes.io/fr/docs/tasks/tools/install-kubectl/)              |    ✅     |
-| [kubectx](https://github.com/ahmetb/kubectx?tab=readme-ov-file#installation)       |    ✅     |
-| [lazydocker](https://github.com/jesseduffield/lazydocker)                          |    ❌     |
-| [pulumi](https://www.pulumi.com/docs/get-started/download-install/)                |    ✅     |
-| [skaffold](https://skaffold.dev/docs/install/#standalone-binary)                   |    ✅     |
-
-### Clusters
-
-Create two local Kubernetes clusters, one for development, one for production.
-
-> [!WARNING]
-> This is only for demonstration purposes, never use a kind cluster in production.
-
-> [!IMPORTANT]
-> kind runs its nodes as containers, so you need to have Docker installed on your machine ([Instructions](https://docs.docker.com/engine/install/)).
-
-```shell
-for cluster in dev prod; do
-    kind create cluster --name ${cluster} --image kindest/node:v1.37.0 --wait 5m
-done
-```
-
-### Pulumi
-
-> [!IMPORTANT]
-> This step is optional if you already have a Pulumi organization where you can create projects and deploy stacks.
-
-You need to have a Pulumi Cloud account and be authenticated.
-
-- Go to the [Pulumi Cloud](https://app.pulumi.com/signup) page and create an account, there is a Free Tier for individuals.
-- Login to your new Pulumi account in your terminal:
-
-  ```shell
-  pulumi login
-  ```
-
-## Usage
-
-> [!IMPORTANT]
-> Throughout all this **Usage** guide, you don't have to leave the `metrik/` directory.
-
-### Configure
-
-Metrik reads `metrik.yaml` from `/config`, `./configs` or the current directory. See
-[`apps/metrik/configs/metrik.yaml`](apps/metrik/configs/metrik.yaml) for a documented example.
-Global settings can also be set with a flag or a `METRIK_`-prefixed environment variable. Checks
-can override `alertThreshold`, `maxTries`, `requestTimeout`, `failureThreshold` and `cooldown`.
-
-#### Circuit breaker
-
-A check whose probes fail `failureThreshold` cycles in a row is skipped for `cooldown`, then
-probed once. If that trial succeeds, the check is probed normally again. If it fails, the check is
-skipped for another `cooldown`. Every failed probe still sends an alert; skipped cycles don't.
-
-| Setting            | Flag                 | Environment variable      | Default |
-| ------------------ | -------------------- | ------------------------- | ------- |
-| `failureThreshold` | `--failureThreshold` | `METRIK_FAILURETHRESHOLD` | `3`     |
-| `cooldown`         | `--cooldown`         | `METRIK_COOLDOWN`         | `60s`   |
-
-Set `failureThreshold: 0` on a check (or globally) to probe it every cycle, without the circuit
-breaker. Negative values are rejected at startup and on config reload.
-
-### Develop
-
-#### Local
-
-For fast iteration, you can use `air` to get live reload for the two applications:
-
-In a terminal, run:
+[`air`](https://github.com/air-verse/air) rebuilds and restarts each application when its code
+changes. In a terminal, start the demo API:
 
 ```shell
 (cd apps/api/ && air)
 ```
 
-In another terminal, run:
+In another terminal, start Metrik. It reads
+[`apps/metrik/configs/metrik.yaml`](apps/metrik/configs/metrik.yaml), which probes the API on
+`localhost:8080`:
 
 ```shell
 (cd apps/metrik/ && air)
 ```
 
-#### Lint and test
+You should see a JSON log entry per check every 10 seconds, with slow responses, retries, failures
+and alerts (the demo API is intentionally flaky). Edit `metrik.yaml` while it runs to see the
+configuration reload.
 
-Lint and test every Go module (tests run with the race detector, which needs a C compiler):
+### 3. Lint and test
 
 ```shell
 mise run lint
-mise run test
+mise run test   # runs with the race detector, which needs a C compiler
 ```
 
-#### In-cluster
+### Next steps
 
-For fast iteration and condition closer to production, you can use `skaffold` to automate the develop+deploy loop:
+To deploy to Kubernetes, see the [deployment guide](docs/metrik-deployment.md).
 
-```shell
-kubectx kind-dev
-skaffold dev
-```
+## Documentation
 
-Once you are done developing, just press ctrl^C to stop the loop and cleanup deployment artifacts.
+| Guide                                           | Content                                                      |
+| :---------------------------------------------- | :----------------------------------------------------------- |
+| [Architecture](docs/metrik-architecture.md)     | Components, check lifecycle, circuit breaker and delivery diagrams. |
+| [Configuration](docs/metrik-configuration.md)   | Every option with its default, flags, environment variables, log events. |
+| [Deployment](docs/metrik-deployment.md)         | Deploy to Kubernetes with Pulumi, Helm or Skaffold.          |
+| [Roadmap](docs/metrik-roadmap.md)               | What is planned next.                                        |
+| [Contributing](docs/metrik-contributing.md)     | Conventions and the Spec Kit workflow.                       |
 
-### Deploy
-
-> [!IMPORTANT]
-> Normally we would build images in Continuous Integration and store them in a registry, but for this demo we will build images directly into the kind clusters.
-
-#### Dev
+The same documentation is available as a website, built with [Hugo](https://gohugo.io):
 
 ```shell
-# Point to the dev cluster
-kubectx kind-dev
-export KO_DOCKER_REPO=kind.local KIND_CLUSTER_NAME=dev
-# Build images and store them in the dev cluster
-(cd apps/api/ && ko build ./cmd/api --base-import-paths -t 0.1.0)
-(cd apps/metrik/ && ko build ./cmd/metrik --base-import-paths -t 0.1.0)
-# Deploy the charts in the dev cluster
-(cd pulumi/ && pulumi up --stack dev --config-file Pulumi.dev.yaml)
-```
-
-#### Prod
-
-```shell
-# Point to the prod cluster
-kubectx kind-prod
-export KO_DOCKER_REPO=kind.local KIND_CLUSTER_NAME=prod
-# Build images and store them in the prod cluster
-(cd apps/api/ && ko build ./cmd/api --base-import-paths -t 0.1.0)
-(cd apps/metrik/ && ko build ./cmd/metrik --base-import-paths -t 0.1.0)
-# Deploy the charts in the prod cluster
-(cd pulumi/ && pulumi up --stack prod --config-file Pulumi.prod.yaml)
-```
-
-### Cleanup
-
-```shell
-# Pulumi
-export PULUMI_ORG=<NAME_OF_YOUR_PULUMI_ORG>
-for stack in dev prod; do
-    (cd pulumi/ && pulumi destroy --stack ${stack} && \
-    pulumi stack rm --force --preserve-config ${PULUMI_ORG:?PULUMI_ORG must not be empty}/metrik/${stack})
-done
-pulumi logout
-
-# Kind
-for cluster in dev prod; do
-    kind delete cluster --name ${cluster}
-done
+mise run docs:serve   # live preview on http://localhost:1313/metrik/
+mise run docs         # static build into public/
 ```
 
 ## References
