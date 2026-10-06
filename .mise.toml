@@ -10,7 +10,7 @@ kubectl = "1.37.1"
 kubectx = "0.11.0"
 lazydocker = "0.25.2"
 minikube = "1.39.0"
-pulumi = "3.266.0"
+pulumi = "3.267.0"
 skaffold = "2.25.0"
 
 [settings]
