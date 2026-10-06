@@ -41,17 +41,6 @@ Terraform or Pulumi.
 
 ## Roadmap
 
-### Small improvements
-
-- Transform the README into a pointer to a docs/ directory, with a proper documentation for the project, with:
-  - A Proper architecture diagram
-  - A detailed explanation of the design choices.
-  - One detailed file per section of the README.
-    - The Features section shoudn't sound like a take at home assignment, but rather a list of features that the project implements.
-- This documentation should also be available as a website, using a static site generator such as Hugo or MkDocs.
-
-### Full fledged improvements
-
 - Use OpenTelemetry to measure endpoints health, and send signals data to a backend such as Prometheus.
 - Replace the alerting mechanism with a proper notification system, such as sending emails or Slack messages.
 
@@ -205,8 +194,8 @@ Once you are done developing, just press ctrl^C to stop the loop and cleanup dep
 kubectx kind-dev
 export KO_DOCKER_REPO=kind.local KIND_CLUSTER_NAME=dev
 # Build images and store them in the dev cluster
-(cd apps/api/ && ko build ./cmd/api --base-import-paths --platform=linux/arm64 -t 0.1.0)
-(cd apps/metrik/ && ko build ./cmd/metrik --base-import-paths --platform=linux/arm64 -t 0.1.0)
+(cd apps/api/ && ko build ./cmd/api --base-import-paths -t 0.1.0)
+(cd apps/metrik/ && ko build ./cmd/metrik --base-import-paths -t 0.1.0)
 # Deploy the charts in the dev cluster
 (cd pulumi/ && pulumi up --stack dev --config-file Pulumi.dev.yaml)
 ```
@@ -218,8 +207,8 @@ export KO_DOCKER_REPO=kind.local KIND_CLUSTER_NAME=dev
 kubectx kind-prod
 export KO_DOCKER_REPO=kind.local KIND_CLUSTER_NAME=prod
 # Build images and store them in the prod cluster
-(cd apps/api/ && ko build ./cmd/api --base-import-paths --platform=linux/arm64 -t 0.1.0)
-(cd apps/metrik/ && ko build ./cmd/metrik --base-import-paths --platform=linux/arm64 -t 0.1.0)
+(cd apps/api/ && ko build ./cmd/api --base-import-paths -t 0.1.0)
+(cd apps/metrik/ && ko build ./cmd/metrik --base-import-paths -t 0.1.0)
 # Deploy the charts in the prod cluster
 (cd pulumi/ && pulumi up --stack prod --config-file Pulumi.prod.yaml)
 ```
