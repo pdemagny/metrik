@@ -75,8 +75,8 @@ Rationale: dev and prod must be reproducible from the repository alone.
   contracts), `configs/` (configuration), and `deploy/` (Helm chart).
 - CLI: `cobra`; logging: `zap`; HTTP API contract: OpenAPI spec at `apps/api/api/openapi.json`,
   which MUST be updated in the same change as any API route or payload change.
-- Packaging: `ko` images, Helm charts; orchestration: Kubernetes (minikube `mk1` = dev,
-  `mk2` = prod for local demos); IaC: Pulumi (Go).
+- Packaging: `ko` images, Helm charts; orchestration: Kubernetes (kind clusters `dev` and
+  `prod` for local demos); IaC: Pulumi (Go).
 - Inner dev loop: `air` for local live reload, `skaffold dev` for in-cluster iteration.
 - The README MUST stay accurate for setup, configuration, and run instructions; a change that
   alters any of these MUST update the README in the same change.
@@ -104,4 +104,4 @@ Rationale: dev and prod must be reproducible from the repository alone.
 - Every plan (`/speckit-plan`) MUST include a Constitution Check; any violation MUST be recorded
   with justification in the plan's Complexity Tracking, or the design changed.
 
-**Version**: 1.2.0 | **Ratified**: 2026-09-30 | **Last Amended**: 2026-10-01
+**Version**: 1.2.1 | **Ratified**: 2026-09-30 | **Last Amended**: 2026-10-06
