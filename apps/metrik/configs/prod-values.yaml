@@ -1,5 +1,5 @@
 image:
-  repository: ko.local/metrik
+  repository: kind.local/metrik
   tag: 0.1.0
 command: ["/ko-app/metrik", "run"]
 configmap:
