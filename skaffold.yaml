@@ -6,7 +6,7 @@ profiles:
   - name: dev
     requiresAllActivations: true
     activation:
-      - kubeContext: mk1
+      - kubeContext: kind-dev
         command: dev
     build:
       artifacts:

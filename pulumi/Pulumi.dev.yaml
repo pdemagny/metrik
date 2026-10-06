@@ -1,7 +1,7 @@
 config:
   global:debug: false
   global:enableComponentResources: false
-  kubernetes:context: mk1
+  kubernetes:context: kind-dev
   metrik:releases:
     - name: api
       namespace: api

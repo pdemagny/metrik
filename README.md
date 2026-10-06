@@ -83,38 +83,35 @@ mise install
 
 You can also install tools manually, using their official instructions for your platform:
 
-| Link                                                                                                   | Required |
-| :----------------------------------------------------------------------------------------------------- | :------: |
-| [air](https://github.com/air-verse/air?tab=readme-ov-file#installation)                                |    ✅     |
-| [dive](https://github.com/wagoodman/dive?tab=readme-ov-file#installation)                              |    ❌     |
-| [golang](https://go.dev/doc/install)                                                                   |    ✅     |
-| [golangci-lint](https://golangci-lint.run/docs/welcome/install/local/)                                 |    ✅     |
-| [helm](https://helm.sh/docs/intro/install)                                                             |    ✅     |
-| [k9s](https://github.com/derailed/k9s?tab=readme-ov-file#installation)                                 |    ✅     |
-| [ko](https://github.com/ko-build/ko?tab=readme-ov-file#install-ko-and-get-started)                     |    ✅     |
-| [kubectl](https://kubernetes.io/fr/docs/tasks/tools/install-kubectl/)                                  |    ✅     |
-| [kubectx](https://github.com/ahmetb/kubectx?tab=readme-ov-file#installation)                           |    ✅     |
-| [lazydocker](https://github.com/jesseduffield/lazydocker)                                              |    ❌     |
-| [minikube](https://minikube.sigs.k8s.io/docs/start/?arch=%2Flinux%2Fx86-64%2Fstable%2Fbinary+download) |    ✅     |
-| [pulumi](https://www.pulumi.com/docs/get-started/download-install/)                                    |    ✅     |
-| [skaffold](https://skaffold.dev/docs/install/#standalone-binary)                                       |    ✅     |
+| Link                                                                               | Required |
+| :--------------------------------------------------------------------------------- | :------: |
+| [air](https://github.com/air-verse/air?tab=readme-ov-file#installation)            |    ✅     |
+| [dive](https://github.com/wagoodman/dive?tab=readme-ov-file#installation)          |    ❌     |
+| [golang](https://go.dev/doc/install)                                               |    ✅     |
+| [golangci-lint](https://golangci-lint.run/docs/welcome/install/local/)             |    ✅     |
+| [helm](https://helm.sh/docs/intro/install)                                         |    ✅     |
+| [k9s](https://github.com/derailed/k9s?tab=readme-ov-file#installation)             |    ✅     |
+| [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)               |    ✅     |
+| [ko](https://github.com/ko-build/ko?tab=readme-ov-file#install-ko-and-get-started) |    ✅     |
+| [kubectl](https://kubernetes.io/fr/docs/tasks/tools/install-kubectl/)              |    ✅     |
+| [kubectx](https://github.com/ahmetb/kubectx?tab=readme-ov-file#installation)       |    ✅     |
+| [lazydocker](https://github.com/jesseduffield/lazydocker)                          |    ❌     |
+| [pulumi](https://www.pulumi.com/docs/get-started/download-install/)                |    ✅     |
+| [skaffold](https://skaffold.dev/docs/install/#standalone-binary)                   |    ✅     |
 
 ### Clusters
 
 Create two local Kubernetes clusters, one for development, one for production.
 
 > [!WARNING]
-> This is only for demonstration purposes, never use a minikube cluster in production.
-
-Feel free to adjust the settings of these commands, including the resources and driver.
+> This is only for demonstration purposes, never use a kind cluster in production.
 
 > [!IMPORTANT]
-> If you do choose the Docker driver, then you need to have Docker installed on your machine ([Instructions](https://docs.docker.com/engine/install/)).
+> kind runs its nodes as containers, so you need to have Docker installed on your machine ([Instructions](https://docs.docker.com/engine/install/)).
 
 ```shell
-for mk in mk1 mk2; do
-    minikube start -p ${mk} --kubernetes-version 1.37.1 --cpus 2 --memory 4GB --disk-size 10GB --driver docker --wait=all --wait-timeout=5m --preload=true && \
-    minikube addons enable metrics-server -p ${mk}
+for cluster in dev prod; do
+    kind create cluster --name ${cluster} --image kindest/node:v1.37.0 --wait 5m
 done
 ```
 
@@ -190,7 +187,7 @@ mise run test
 For fast iteration and condition closer to production, you can use `skaffold` to automate the develop+deploy loop:
 
 ```shell
-kubectx mk1
+kubectx kind-dev
 skaffold dev
 ```
 
@@ -199,17 +196,17 @@ Once you are done developing, just press ctrl^C to stop the loop and cleanup dep
 ### Deploy
 
 > [!IMPORTANT]
-> Normally we would build images in Continuous Integration and store them in a registry, but for this demo we will build images directly into the minikube clusters.
+> Normally we would build images in Continuous Integration and store them in a registry, but for this demo we will build images directly into the kind clusters.
 
 #### Dev
 
 ```shell
 # Point to the dev cluster
-kubectx mk1
-eval $(minikube docker-env -p mk1)
+kubectx kind-dev
+export KO_DOCKER_REPO=kind.local KIND_CLUSTER_NAME=dev
 # Build images and store them in the dev cluster
-(cd apps/api/ && ko build . --base-import-paths . -L --platform=linux/arm64 -t 0.1.0)
-(cd apps/metrik/ && ko build . --base-import-paths . -L --platform=linux/arm64 -t 0.1.0)
+(cd apps/api/ && ko build ./cmd/api --base-import-paths --platform=linux/arm64 -t 0.1.0)
+(cd apps/metrik/ && ko build ./cmd/metrik --base-import-paths --platform=linux/arm64 -t 0.1.0)
 # Deploy the charts in the dev cluster
 (cd pulumi/ && pulumi up --stack dev --config-file Pulumi.dev.yaml)
 ```
@@ -218,11 +215,11 @@ eval $(minikube docker-env -p mk1)
 
 ```shell
 # Point to the prod cluster
-kubectx mk2
-eval $(minikube docker-env -p mk2)
+kubectx kind-prod
+export KO_DOCKER_REPO=kind.local KIND_CLUSTER_NAME=prod
 # Build images and store them in the prod cluster
-(cd apps/api/ && ko build . --base-import-paths . -L --platform=linux/arm64 -t 0.1.0)
-(cd apps/metrik/ && ko build . --base-import-paths . -L --platform=linux/arm64 -t 0.1.0)
+(cd apps/api/ && ko build ./cmd/api --base-import-paths --platform=linux/arm64 -t 0.1.0)
+(cd apps/metrik/ && ko build ./cmd/metrik --base-import-paths --platform=linux/arm64 -t 0.1.0)
 # Deploy the charts in the prod cluster
 (cd pulumi/ && pulumi up --stack prod --config-file Pulumi.prod.yaml)
 ```
@@ -238,10 +235,9 @@ for stack in dev prod; do
 done
 pulumi logout
 
-# Minikube
-for mk in mk1 mk2; do
-    minikube delete -p ${mk} && \
-    eval $(minikube docker-env -p ${mk} --unset)
+# Kind
+for cluster in dev prod; do
+    kind delete cluster --name ${cluster}
 done
 ```
 

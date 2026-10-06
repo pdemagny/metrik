@@ -1,5 +1,5 @@
 image:
-  repository: ko.local/api
+  repository: kind.local/api
   tag: 0.1.0
 command: ["/ko-app/api"]
 service:
