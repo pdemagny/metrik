@@ -63,7 +63,7 @@ Rationale: a health checker must never amplify an outage or leak resources while
   stacks (`dev`, `prod`); manual `kubectl apply`/`helm install` MUST NOT be the deployment path.
 - Images MUST be built with `ko`; containers MUST run as non-root with a restrictive
   `securityContext` and explicit resource requests/limits.
-- Tool versions MUST be pinned in `.mise.toml` and `.tool-versions`, kept in sync.
+- Tool versions MUST be pinned in `.mise.toml`, the single source of tool installation.
 
 Rationale: dev and prod must be reproducible from the repository alone.
 
@@ -104,4 +104,4 @@ Rationale: dev and prod must be reproducible from the repository alone.
 - Every plan (`/speckit-plan`) MUST include a Constitution Check; any violation MUST be recorded
   with justification in the plan's Complexity Tracking, or the design changed.
 
-**Version**: 1.2.1 | **Ratified**: 2026-09-30 | **Last Amended**: 2026-10-06
+**Version**: 1.2.2 | **Ratified**: 2026-09-30 | **Last Amended**: 2026-10-06
