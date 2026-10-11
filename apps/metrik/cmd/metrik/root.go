@@ -22,7 +22,7 @@ var (
 	}
 )
 
-func Execute() {
+func main() {
 	// Logger
 	logger := log.CreateLogger()
 	defer logger.Sync()
