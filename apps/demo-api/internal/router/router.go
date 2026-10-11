@@ -86,14 +86,9 @@ func getSlow(_ *gin.Context) (*APIResponse, error) {
 func getReady(_ *gin.Context) (*APIResponse, error) {
 	reason := ""
 	status := http.StatusOK
-	if !mayhem() {
+	if rand.IntN(2) != 0 {
 		reason = "database service not ready yet"
 		status = http.StatusServiceUnavailable
 	}
 	return &APIResponse{Message: "readiness", Status: status, Reason: reason}, nil
-}
-
-func mayhem() bool {
-	num := rand.IntN(100)
-	return num%2 == 0
 }
