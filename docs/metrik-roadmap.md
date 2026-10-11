@@ -19,6 +19,6 @@ What is planned next. Items are not ordered and carry no dates.
 - Retries with exponential backoff on transient failures
 - Per-check overrides and hot configuration reload
 - Circuit breaker for endpoints that keep failing
-- Helm charts and Pulumi deployment, with an OpenAPI-described demo API
+- Helm charts and Pulumi deployment, with an OpenAPI-described Demo API
 
 Ideas and proposals are welcome: see [Contributing](metrik-contributing.md).
