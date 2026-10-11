@@ -20,23 +20,19 @@ func NewRunCmd(ctx context.Context, logger *zap.Logger) *cobra.Command {
 		Args:    cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			var runConfig config.Config
-			err := rootConfig.Unmarshal(&runConfig)
-			if err != nil {
-				logger.Fatal("unable to decode into struct", zap.Error(err))
-			}
-			if err := runConfig.Validate(); err != nil {
-				logger.Fatal("invalid config", zap.Error(err))
-			}
-			rootConfig.WatchConfig()
-			rootConfig.OnConfigChange(func(_ fsnotify.Event) {
-				logger.Debug("reloading config ...")
-				err := rootConfig.Unmarshal(&runConfig)
-				if err != nil {
+			load := func() {
+				if err := rootConfig.Unmarshal(&runConfig); err != nil {
 					logger.Fatal("unable to decode into struct", zap.Error(err))
 				}
 				if err := runConfig.Validate(); err != nil {
 					logger.Fatal("invalid config", zap.Error(err))
 				}
+			}
+			load()
+			rootConfig.WatchConfig()
+			rootConfig.OnConfigChange(func(_ fsnotify.Event) {
+				logger.Debug("reloading config ...")
+				load()
 			})
 
 			return runner.Run(ctx, logger, func() config.Config { return runConfig })
