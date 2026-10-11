@@ -43,13 +43,13 @@ func NewRouter() (*fizz.Fizz, error) {
 	f := fizz.NewFromEngine(router)
 
 	infos := &openapi.Info{
-		Title:       "Metrik API",
-		Description: "Metrik API.",
+		Title:       "Demo API",
+		Description: "Demo API with live, slow and flaky endpoints, meant as a target for health checks.",
 		Version:     "0.1.0",
 	}
 	f.GET("/openapi", nil, f.OpenAPI(infos, "json"))
 
-	routes(f.Group("/v1", "v1 api", "v1 metrik api."))
+	routes(f.Group("/v1", "v1 api", "Demo API v1."))
 
 	if len(f.Errors()) != 0 {
 		return nil, fmt.Errorf("fizz errors: %v", f.Errors())
