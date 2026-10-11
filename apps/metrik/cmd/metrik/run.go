@@ -16,7 +16,6 @@ func NewRunCmd(ctx context.Context, logger *zap.Logger) *cobra.Command {
 		Use:     "run",
 		Aliases: []string{"r"},
 		Short:   "Run health checks.",
-		Long:    "Run health checks.",
 		Args:    cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			var runConfig config.Config

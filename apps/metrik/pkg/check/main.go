@@ -69,7 +69,7 @@ func (c *Check) Run(ctx context.Context, logger *zap.Logger, client *http.Client
 	// Wrap request in retry logic
 	operation := func() (*Check, error) {
 		responseTime := time.Now()
-		response, err := client.Do(req.WithContext(ctx))
+		response, err := client.Do(req)
 		if err != nil {
 			logger.Error("unable to perform check", zap.Error(err))
 			return c, err
