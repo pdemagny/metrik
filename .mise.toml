@@ -22,7 +22,7 @@ jobs = 4
 description = "Lint every Go module (without golangci-lint's auto-fix)"
 run = '''
 status=0
-for m in apps/api apps/metrik pulumi; do
+for m in apps/demo-api apps/metrik pulumi; do
   echo "==> $m"
   (cd "$m" && golangci-lint run --fix=false ./...) || status=1
 done
@@ -34,7 +34,7 @@ description = "Run the Go tests of every module with the race detector"
 env = { CGO_ENABLED = "1" }
 run = '''
 status=0
-for m in apps/api apps/metrik pulumi; do
+for m in apps/demo-api apps/metrik pulumi; do
   echo "==> $m"
   (cd "$m" && go test -race -count=1 ./...) || status=1
 done

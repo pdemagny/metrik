@@ -10,10 +10,10 @@ profiles:
         command: dev
     build:
       artifacts:
-        - image: api
-          context: apps/api
+        - image: demo-api
+          context: apps/demo-api
           ko:
-            main: ./cmd/api
+            main: ./cmd/demo-api
         - image: metrik
           context: apps/metrik
           ko:
@@ -21,16 +21,16 @@ profiles:
     deploy:
       helm:
         releases:
-          - name: dev-api
-            namespace: dev-api
+          - name: dev-demo-api
+            namespace: dev-demo-api
             createNamespace: true
-            chartPath: apps/api/deploy/chart/api
+            chartPath: apps/demo-api/deploy/chart/demo-api
             valuesFiles:
-              - apps/api/configs/dev-values.yaml
+              - apps/demo-api/configs/dev-values.yaml
             version: 0.1.0
             setValueTemplates:
-              image.repository: "{{.IMAGE_REPO_api}}"
-              image.tag: "{{.IMAGE_TAG_api}}@{{.IMAGE_DIGEST_api}}"
+              image.repository: "{{.IMAGE_REPO_demo_api}}"
+              image.tag: "{{.IMAGE_TAG_demo_api}}@{{.IMAGE_DIGEST_demo_api}}"
           - name: dev-metrik
             namespace: dev-metrik
             createNamespace: true

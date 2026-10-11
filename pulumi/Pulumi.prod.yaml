@@ -3,10 +3,10 @@ config:
   global:enableComponentResources: true
   kubernetes:context: kind-prod
   metrik:releases:
-    - name: api
-      namespace: api
-      chartPath: "../apps/api/deploy/chart/api/"
-      chartValuesFilePath: "../apps/api/configs/prod-values.yaml"
+    - name: demo-api
+      namespace: demo-api
+      chartPath: "../apps/demo-api/deploy/chart/demo-api/"
+      chartValuesFilePath: "../apps/demo-api/configs/prod-values.yaml"
       chartVersion: "0.1.0"
     - name: metrik
       namespace: metrik

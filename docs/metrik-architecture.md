@@ -10,7 +10,7 @@ Metrik is a small set of independent Go modules plus the tooling to deliver them
 | Path            | Role                                                            |
 | :-------------- | :-------------------------------------------------------------- |
 | `apps/metrik`   | The health checker (CLI built with cobra, logging with zap)     |
-| `apps/api`      | A demo HTTP API with live, slow and flaky readiness endpoints   |
+| `apps/demo-api` | A demo HTTP API with live, slow and flaky readiness endpoints   |
 | `pulumi/`       | Pulumi (Go) program deploying both Helm charts to a cluster     |
 | `skaffold.yaml` | In-cluster development loop                                     |
 
@@ -86,7 +86,7 @@ flowchart LR
         NS["Namespace<br/>(pod security: restricted)"]
         CM["ConfigMap metrik.yaml"]
         Dep["Deployment metrik"]
-        Api["Deployment api"]
+        Api["Deployment demo-api"]
         CM -->|mounted at /config| Dep
         Dep -->|probes| Api
         NS --- CM

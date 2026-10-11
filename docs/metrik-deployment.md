@@ -39,7 +39,7 @@ The stack deploys both the demo API and Metrik, so build both images.
 # Dev
 kubectx kind-dev
 export KO_DOCKER_REPO=kind.local KIND_CLUSTER_NAME=dev
-(cd apps/api/ && ko build ./cmd/api --base-import-paths -t 0.1.0)
+(cd apps/demo-api/ && ko build ./cmd/demo-api --base-import-paths -t 0.1.0)
 (cd apps/metrik/ && ko build ./cmd/metrik --base-import-paths -t 0.1.0)
 (cd pulumi/ && pulumi up --stack dev --config-file Pulumi.dev.yaml)
 ```
@@ -64,7 +64,7 @@ config:
 Check the result and read the logs:
 
 ```shell
-kubectl get pods --all-namespaces | grep -E 'api|metrik'
+kubectl get pods --all-namespaces | grep -E 'demo-api|metrik'
 kubectl logs -n dev-metrik deploy/dev-metrik --follow
 ```
 
@@ -116,7 +116,7 @@ configmap:
       maxConcurrent: 10
       checks:
         - name: "liveness ok"
-          endpoint: "http://dev-api.dev-api.svc.cluster.local:8080/v1/.well-known/live"
+          endpoint: "http://dev-demo-api.dev-demo-api.svc.cluster.local:8080/v1/.well-known/live"
 volumes:
   - name: metrik-config
     configMap:
