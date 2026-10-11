@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"strings"
 	"time"
 
@@ -12,13 +13,17 @@ import (
 	"go.uber.org/zap"
 )
 
+//go:embed version.txt
+var version string
+
 var (
 	rootConfig     = viper.New()
 	debug, verbose bool
 	rootCmd        = &cobra.Command{
-		Use:   "metrik",
-		Short: "Metrik healthchecker.",
-		Long:  "Command-Line Interface for the Metrik healthchecker.",
+		Use:     "metrik",
+		Short:   "Metrik healthchecker.",
+		Long:    "Command-Line Interface for the Metrik healthchecker.",
+		Version: strings.TrimSpace(version),
 	}
 )
 
@@ -64,7 +69,6 @@ func main() {
 
 	// Commands
 	rootCmd.AddCommand(NewRunCmd(ctx, logger))
-	rootCmd.AddCommand(NewVersionCmd())
 
 	cobra.CheckErr(rootCmd.Execute())
 }
