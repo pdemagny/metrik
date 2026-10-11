@@ -63,7 +63,7 @@ on `localhost:8080`:
 (cd apps/metrik/ && air)
 ```
 
-You should see a JSON log entry per check every 10 seconds, with slow responses, retries, failures
+You should see a JSON log entry per check every 15 seconds, with slow responses, retries, failures
 and alerts (the Demo API is intentionally flaky). Edit `metrik.yaml` while it runs to see the
 configuration reload.
 

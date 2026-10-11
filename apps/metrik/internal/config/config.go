@@ -27,8 +27,12 @@ type (
 )
 
 // Validate rejects settings that have no meaning, such as negative circuit
-// breaker values.
+// breaker values, and a runInterval too short for a probe to use all its tries.
 func (cfg Config) Validate() error {
+	if tries := max(cfg.MaxTries, 1); tooShort(cfg.RunInterval, tries, cfg.RequestTimeout) {
+		return fmt.Errorf("runInterval (%s) must not be below maxTries x requestTimeout (%d x %s)",
+			cfg.RunInterval, tries, cfg.RequestTimeout)
+	}
 	if cfg.FailureThreshold < 0 {
 		return fmt.Errorf("failureThreshold must not be negative, got %d", cfg.FailureThreshold)
 	}
@@ -42,8 +46,25 @@ func (cfg Config) Validate() error {
 		if c.Cooldown < 0 {
 			return fmt.Errorf("check %q: cooldown must not be negative, got %s", c.Name, c.Cooldown)
 		}
+		if r := cfg.Resolve(c); tooShort(cfg.RunInterval, r.MaxTries, r.RequestTimeout) {
+			return fmt.Errorf("check %q: runInterval (%s) must not be below maxTries x requestTimeout (%d x %s)",
+				c.Name, cfg.RunInterval, r.MaxTries, r.RequestTimeout)
+		}
 	}
 	return nil
+}
+
+// tooShort reports whether interval is below tries x timeout. It divides
+// rather than multiplies, so a large tries value cannot overflow.
+func tooShort(interval time.Duration, tries uint, timeout time.Duration) bool {
+	if timeout <= 0 {
+		return false
+	}
+	n := int64(interval / timeout)
+	if n < 0 {
+		return true
+	}
+	return uint64(n) < uint64(tries)
 }
 
 // Resolve returns a copy of c whose AlertThreshold, MaxTries, RequestTimeout and
