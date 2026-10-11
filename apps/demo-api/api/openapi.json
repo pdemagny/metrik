@@ -1,8 +1,8 @@
 {
   "openapi": "3.0.1",
   "info": {
-    "title": "Metrik API",
-    "description": "Metrik API.",
+    "title": "Demo API",
+    "description": "Demo API with live, slow and flaky endpoints, meant as a target for health checks.",
     "version": "0.1.0"
   },
   "paths": {
@@ -17,7 +17,7 @@
             "description": "OK",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/APIResponse" }
+                "schema": { "$ref": "#/components/schemas/RouterAPIResponse" }
               }
             }
           }
@@ -36,12 +36,12 @@
             "headers": {
               "Content-Type": {
                 "description": "application/json",
-                "schema": { "$ref": "#/components/schemas/APIResponse" }
+                "schema": { "$ref": "#/components/schemas/RouterAPIResponse" }
               }
             },
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/APIResponse" }
+                "schema": { "$ref": "#/components/schemas/RouterAPIResponse" }
               }
             }
           },
@@ -60,7 +60,7 @@
             "description": "OK",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/APIResponse" }
+                "schema": { "$ref": "#/components/schemas/RouterAPIResponse" }
               }
             }
           }
@@ -70,7 +70,7 @@
   },
   "components": {
     "schemas": {
-      "APIResponse": {
+      "RouterAPIResponse": {
         "type": "object",
         "properties": {
           "message": { "type": "string", "maxLength": 255 },
@@ -81,5 +81,5 @@
       }
     }
   },
-  "tags": [{ "name": "v1 api", "description": "v1 metrik api." }]
+  "tags": [{ "name": "v1 api", "description": "Demo API v1." }]
 }

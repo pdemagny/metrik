@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"reflect"
 	"testing"
 )
 
@@ -39,8 +41,24 @@ func TestNewRouter(t *testing.T) {
 
 	t.Run("openapi", func(t *testing.T) {
 		t.Parallel()
-		if rec := serve(t, "/openapi"); rec.Code != http.StatusOK {
-			t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+		rec := serve(t, "/openapi")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		served := rec.Body.Bytes()
+		file, err := os.ReadFile("../../api/openapi.json")
+		if err != nil {
+			t.Fatalf("read contract file: %v", err)
+		}
+		var got, want any
+		if err := json.Unmarshal(served, &got); err != nil {
+			t.Fatalf("decode served contract: %v", err)
+		}
+		if err := json.Unmarshal(file, &want); err != nil {
+			t.Fatalf("decode contract file: %v", err)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Error("served contract differs from api/openapi.json: update the file")
 		}
 	})
 }
