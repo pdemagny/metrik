@@ -35,11 +35,8 @@ linters:
     - nolintlint # Better not to have //nolint: at all ;)
     # - prealloc # Finds slices that could potentially be pre-allocated. Small performance win + cleaner code.
     - predeclared # Finds shadowing of Go's predeclared identifiers.
-    - promlinter # Lint your Prometheus metrics name.
     - reassign # Checks that package variables are not reassigned.
     - revive # Drop-in replacement of `golint`.
-    - rowserrcheck # Somewhat similar to `bodyclose` but for `database/sql` package.
-    - sqlclosecheck # Somewhat similar to `bodyclose` but for `database/sql` package.
     - staticcheck # I have found that it's not the same as staticcheck binary :\
     - tagliatelle # Check struct tags.
     - testableexamples # Test-related checks. All of them are good.
@@ -57,10 +54,6 @@ linters:
       - common-false-positives
       - legacy
       - std-error-handling
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
   settings:
     gosec:
       excludes:
@@ -108,10 +101,6 @@ linters:
           deny:
             - pkg: "math/rand$"
               desc: use math/rand/v2
-            - pkg: "github.com/sirupsen/logrus"
-              desc: not allowed
-            - pkg: "github.com/pkg/errors"
-              desc: Should be replaced by standard lib errors package
     staticcheck:
       checks:
         - "all"
@@ -138,7 +127,6 @@ linters:
       check-type-assertions: true # Report `a := b.(MyStruct)` when `a, ok := ...` should be.
       check-blank: true # Report skipped checks:`num, _ := strconv.Atoi(numStr)`.
       exclude-functions:
-        - io/ioutil.ReadFile
         - io.Copy(*bytes.Buffer)
         - io.Copy(os.Stdout)
         - (*go.uber.org/zap.Logger).Sync # Syncing stdout returns EINVAL/ENOTTY; nothing to act on.
@@ -152,10 +140,6 @@ linters:
         rules:
           json: camel # why it's not a `snake` by default?!
           yaml: camel # why it's not a `snake` by default?!
-          xml: camel
-          bson: camel
-          avro: snake
-          mapstructure: kebab
 
 run:
   allow-parallel-runners: true
@@ -166,7 +150,3 @@ formatters:
     - gofmt
   exclusions:
     generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
