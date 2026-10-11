@@ -17,15 +17,15 @@ configmap:
       cooldown: "60s"
       checks:
         - name: "liveness ok" # should always pass.
-          endpoint: "http://prod-api.prod-api.svc.cluster.local:8080/v1/.well-known/live"
+          endpoint: "http://prod-demo-api.prod-demo-api.svc.cluster.local:8080/v1/.well-known/live"
         - name: "liveness slow timeout" # should randomly timeout, with a retry mecanism. If the retries timeouts too, it will log an error and send out an alert.
-          endpoint: "http://prod-api.prod-api.svc.cluster.local:8080/v1/slow"
+          endpoint: "http://prod-demo-api.prod-demo-api.svc.cluster.local:8080/v1/slow"
           requestTimeout: "1s"
         - name: "liveness slow warn" # should randomly be slow, and warn if it is.
-          endpoint: "http://prod-api.prod-api.svc.cluster.local:8080/v1/slow"
+          endpoint: "http://prod-demo-api.prod-demo-api.svc.cluster.local:8080/v1/slow"
           alertThreshold: "3s"
         - name: "readiness flaky" # should randomly give a 200 or a 503 depending on an optional application status parsed from the response body.
-          endpoint: "http://prod-api.prod-api.svc.cluster.local:8080/v1/.well-known/ready"
+          endpoint: "http://prod-demo-api.prod-demo-api.svc.cluster.local:8080/v1/.well-known/ready"
 volumes:
   - name: metrik-config
     configMap:

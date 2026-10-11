@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"api/internal/router"
+	"demo-api/internal/router"
 )
 
 func main() {

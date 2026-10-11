@@ -27,7 +27,7 @@ API to monitor, Helm charts, and a Pulumi program to deploy everything to Kubern
   [ko](https://ko.build), [Pulumi](https://www.pulumi.com) stacks for `dev` and `prod`, and a
   [Skaffold](https://skaffold.dev) loop for in-cluster development.
 - **Demo API**: a small service with live, slow and flaky readiness endpoints to practice on,
-  documented with an OpenAPI spec (`apps/api/api/openapi.json`, served at `/openapi`).
+  documented with an OpenAPI spec (`apps/demo-api/api/openapi.json`, served at `/openapi`).
 
 ## Getting started
 
@@ -51,7 +51,7 @@ the race detector) are needed for this quickstart; the rest is for deployment an
 changes. In a terminal, start the demo API:
 
 ```shell
-(cd apps/api/ && air)
+(cd apps/demo-api/ && air)
 ```
 
 In another terminal, start Metrik. It reads

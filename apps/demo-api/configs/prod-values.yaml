@@ -1,7 +1,7 @@
 image:
-  repository: kind.local/api
+  repository: kind.local/demo-api
   tag: 0.1.0
-command: ["/ko-app/api"]
+command: ["/ko-app/demo-api"]
 service:
   port: 8080
 livenessProbe:

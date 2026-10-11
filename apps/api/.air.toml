@@ -1,4 +1,0 @@
-# Live reload for local development: `air` from apps/api.
-[build]
-cmd = "go build -o ./tmp/main ./cmd/api"
-bin = "./tmp/main"
