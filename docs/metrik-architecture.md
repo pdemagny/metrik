@@ -5,14 +5,16 @@ weight: 10
 
 # Architecture
 
-Metrik is a small set of independent Go modules plus the tooling to deliver them.
+The repository is a small set of independent Go modules plus the tooling to deliver them. Metrik
+is the health checker; the Demo API is a separate sample target that Metrik is pointed at, and it
+knows nothing about Metrik.
 
-| Path            | Role                                                            |
-| :-------------- | :-------------------------------------------------------------- |
-| `apps/metrik`   | The health checker (CLI built with cobra, logging with zap)     |
-| `apps/demo-api` | A demo HTTP API with live, slow and flaky readiness endpoints   |
-| `pulumi/`       | Pulumi (Go) program deploying both Helm charts to a cluster     |
-| `skaffold.yaml` | In-cluster development loop                                     |
+| Path            | Role                                                                                 |
+| :-------------- | :----------------------------------------------------------------------------------- |
+| `apps/metrik`   | The health checker (CLI built with cobra, logging with zap)                          |
+| `apps/demo-api` | The Demo API: a standalone HTTP service with live, slow and flaky readiness endpoints |
+| `pulumi/`       | Pulumi (Go) program deploying both Helm charts to a cluster                          |
+| `skaffold.yaml` | In-cluster development loop                                                          |
 
 Inside `apps/metrik`, `cmd/metrik/` only wires commands, flags and configuration. The logic lives
 in `internal/config` (settings, validation, per-check resolution), `internal/runner` (scheduling

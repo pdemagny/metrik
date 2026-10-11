@@ -33,7 +33,7 @@ done
 
 ## 2. Build and deploy
 
-The stack deploys both the demo API and Metrik, so build both images.
+The stack deploys both the Demo API and Metrik, so build both images.
 
 ```shell
 # Dev
@@ -170,6 +170,24 @@ skaffold dev
 ```
 
 Press `Ctrl+C` to stop; Skaffold removes what it deployed.
+
+## Upgrading from the `api` names
+
+The Demo API used to be deployed as `api`. If an environment predates the rename:
+
+- **Names**: the release and namespace `<stack>-api` are now `<stack>-demo-api`, and the image
+  `kind.local/api` is now `kind.local/demo-api`. Rebuild the image with the command from
+  [Build and deploy](#2-build-and-deploy).
+- **Address**: the Demo API now answers at
+  `http://<stack>-demo-api.<stack>-demo-api.svc.cluster.local:8080`. Update any Metrik settings of
+  your own that still point at `<stack>-api.<stack>-api`.
+- **Pulumi**: the next `pulumi up` creates the new release and namespace and deletes the old ones.
+- **Skaffold or manual installs**: remove what is left by hand:
+
+  ```shell
+  helm uninstall dev-api -n dev-api
+  kubectl delete namespace dev-api
+  ```
 
 ## Cleanup
 

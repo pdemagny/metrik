@@ -2,7 +2,7 @@
 
 Metrik is an automated health checker for web applications. It probes HTTP health endpoints at a
 regular interval, measures response time and status, understands application-level health
-indicators in the response body, and raises alerts when something degrades. It ships with a demo
+indicators in the response body, and raises alerts when something degrades. It ships with a Demo
 API to monitor, Helm charts, and a Pulumi program to deploy everything to Kubernetes.
 
 ## Features
@@ -26,12 +26,13 @@ API to monitor, Helm charts, and a Pulumi program to deploy everything to Kubern
 - **Deployment included**: a Helm chart per application, images built with
   [ko](https://ko.build), [Pulumi](https://www.pulumi.com) stacks for `dev` and `prod`, and a
   [Skaffold](https://skaffold.dev) loop for in-cluster development.
-- **Demo API**: a small service with live, slow and flaky readiness endpoints to practice on,
-  documented with an OpenAPI spec (`apps/demo-api/api/openapi.json`, served at `/openapi`).
+- **Demo API**: a small standalone service with live, slow and flaky readiness endpoints to
+  practice on. It knows nothing about Metrik and is documented with an OpenAPI spec
+  (`apps/demo-api/api/openapi.json`, served at `/openapi`).
 
 ## Getting started
 
-Run Metrik locally against the demo API, with live reload.
+Run Metrik locally against the Demo API, with live reload.
 
 ### 1. Install the tools
 
@@ -45,25 +46,25 @@ This installs every tool pinned in [`.mise.toml`](.mise.toml), including the Spe
 the [contributing guide](docs/metrik-contributing.md). Only `air` and `go` (plus a C compiler for
 the race detector) are needed for this quickstart; the rest is for deployment and documentation.
 
-### 2. Run the API and Metrik
+### 2. Run the Demo API and Metrik
 
 [`air`](https://github.com/air-verse/air) rebuilds and restarts each application when its code
-changes. In a terminal, start the demo API:
+changes. In a terminal, start the Demo API:
 
 ```shell
 (cd apps/demo-api/ && air)
 ```
 
 In another terminal, start Metrik. It reads
-[`apps/metrik/configs/metrik.yaml`](apps/metrik/configs/metrik.yaml), which probes the API on
-`localhost:8080`:
+[`apps/metrik/configs/metrik.yaml`](apps/metrik/configs/metrik.yaml), which probes the Demo API
+on `localhost:8080`:
 
 ```shell
 (cd apps/metrik/ && air)
 ```
 
 You should see a JSON log entry per check every 10 seconds, with slow responses, retries, failures
-and alerts (the demo API is intentionally flaky). Edit `metrik.yaml` while it runs to see the
+and alerts (the Demo API is intentionally flaky). Edit `metrik.yaml` while it runs to see the
 configuration reload.
 
 ### 3. Lint and test
