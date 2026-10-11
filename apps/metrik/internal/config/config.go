@@ -3,6 +3,7 @@
 package config
 
 import (
+	"cmp"
 	"fmt"
 	"time"
 
@@ -50,27 +51,16 @@ func (cfg Config) Validate() error {
 // whose FailureThreshold falls back to the global value when nil.
 func (cfg Config) Resolve(c *check.Check) *check.Check {
 	r := *c
-	if r.AlertThreshold == 0 {
-		r.AlertThreshold = cfg.AlertThreshold
-	}
-	if r.MaxTries == 0 {
-		r.MaxTries = cfg.MaxTries
-	}
+	r.AlertThreshold = cmp.Or(r.AlertThreshold, cfg.AlertThreshold)
 	// Zero tries means unlimited retries to the backoff library; always keep them bounded.
-	if r.MaxTries == 0 {
-		r.MaxTries = 1
-	}
-	if r.RequestTimeout == 0 {
-		r.RequestTimeout = cfg.RequestTimeout
-	}
+	r.MaxTries = cmp.Or(r.MaxTries, cfg.MaxTries, 1)
+	r.RequestTimeout = cmp.Or(r.RequestTimeout, cfg.RequestTimeout)
 	// Always a fresh pointer, so the copy never aliases the input check.
 	threshold := cfg.FailureThreshold
 	if r.FailureThreshold != nil {
 		threshold = *r.FailureThreshold
 	}
 	r.FailureThreshold = &threshold
-	if r.Cooldown == 0 {
-		r.Cooldown = cfg.Cooldown
-	}
+	r.Cooldown = cmp.Or(r.Cooldown, cfg.Cooldown)
 	return &r
 }
