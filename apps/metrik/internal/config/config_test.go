@@ -133,9 +133,12 @@ func TestExampleConfigLoads(t *testing.T) {
 	if !cfg.Verbose || cfg.Debug {
 		t.Errorf("verbose/debug = %t/%t, want true/false", cfg.Verbose, cfg.Debug)
 	}
-	if cfg.RunInterval != 10*time.Second || cfg.MaxConcurrent != 10 || cfg.RequestTimeout != 5*time.Second ||
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("validate = %v, want nil", err)
+	}
+	if cfg.RunInterval != 15*time.Second || cfg.MaxConcurrent != 10 || cfg.RequestTimeout != 5*time.Second ||
 		cfg.AlertThreshold != 3*time.Second || cfg.MaxTries != 3 || cfg.FailureThreshold != 3 || cfg.Cooldown != time.Minute {
-		t.Errorf("globals = %+v, want runInterval 10s, maxConcurrent 10, requestTimeout 5s, alertThreshold 3s, maxTries 3, "+
+		t.Errorf("globals = %+v, want runInterval 15s, maxConcurrent 10, requestTimeout 5s, alertThreshold 3s, maxTries 3, "+
 			"failureThreshold 3, cooldown 1m", cfg)
 	}
 
@@ -184,6 +187,53 @@ func TestValidate(t *testing.T) {
 			name: "negative check cooldown",
 			cfg:  Config{Checks: []*check.Check{{Name: "x", Cooldown: -5 * time.Second}}},
 			want: []string{`check "x"`, "cooldown", "must not be negative"},
+		},
+		{
+			name: "run interval below tries x timeout",
+			cfg:  Config{RunInterval: 10 * time.Second, MaxTries: 3, RequestTimeout: 5 * time.Second},
+			want: []string{"runInterval (10s)", "maxTries x requestTimeout (3 x 5s)"},
+		},
+		{
+			name: "run interval equal to tries x timeout",
+			cfg: Config{
+				RunInterval: 15 * time.Second, MaxTries: 3, RequestTimeout: 5 * time.Second,
+				Checks: []*check.Check{{Name: "x"}},
+			},
+		},
+		{
+			name: "zero tries count as one",
+			cfg: Config{
+				RunInterval: 5 * time.Second, RequestTimeout: 5 * time.Second,
+				Checks: []*check.Check{{Name: "x"}},
+			},
+		},
+		{
+			name: "zero tries, run interval below timeout",
+			cfg:  Config{RunInterval: 4 * time.Second, RequestTimeout: 5 * time.Second},
+			want: []string{"runInterval (4s)", "(1 x 5s)"},
+		},
+		{
+			name: "check timeout override breaks the rule",
+			cfg: Config{
+				RunInterval: 15 * time.Second, MaxTries: 3, RequestTimeout: 5 * time.Second,
+				Checks: []*check.Check{{Name: "x", RequestTimeout: 6 * time.Second}},
+			},
+			want: []string{`check "x"`, "runInterval (15s)", "(3 x 6s)"},
+		},
+		{
+			name: "check tries override breaks the rule",
+			cfg: Config{
+				RunInterval: 15 * time.Second, MaxTries: 3, RequestTimeout: 5 * time.Second,
+				Checks: []*check.Check{{Name: "x", MaxTries: 4}},
+			},
+			want: []string{`check "x"`, "runInterval (15s)", "(4 x 5s)"},
+		},
+		{
+			name: "check overrides within the rule",
+			cfg: Config{
+				RunInterval: 15 * time.Second, MaxTries: 3, RequestTimeout: 5 * time.Second,
+				Checks: []*check.Check{{Name: "x", MaxTries: 5, RequestTimeout: 3 * time.Second}},
+			},
 		},
 	}
 

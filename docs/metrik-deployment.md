@@ -112,7 +112,7 @@ configmap:
   create: true
   data:
     metrik.yaml: |
-      runInterval: "10s"
+      runInterval: "15s"
       maxConcurrent: 10
       checks:
         - name: "liveness ok"

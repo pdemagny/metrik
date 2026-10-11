@@ -19,7 +19,7 @@ while running and apply from the next cycle; an invalid reloaded file stops the 
 | :----------------- | :------- | :------ | :------------------------------- | :------------------------ | :----------------------------------------------------------------------- |
 | `debug`            | bool     | `false` | `--debug`                        | `METRIK_DEBUG`            | Print data structures and debugging messages.                            |
 | `verbose`          | bool     | `true`  | `--verbose`, `-v`                | `METRIK_VERBOSE`          | Enable more verbose output.                                              |
-| `runInterval`      | duration | `10s`   | `--runInterval`, `-i`            | `METRIK_RUNINTERVAL`      | Interval between two check cycles.                                       |
+| `runInterval`      | duration | `15s`   | `--runInterval`, `-i`            | `METRIK_RUNINTERVAL`      | Interval between two check cycles.                                       |
 | `maxConcurrent`    | int      | `10`    | `--maxConcurrent`, `-c`          | `METRIK_MAXCONCURRENT`    | Maximum number of checks running at the same time.                       |
 | `requestTimeout`   | duration | `5s`    | `--requestTimeout`, `-t`         | `METRIK_REQUESTTIMEOUT`   | Timeout of each HTTP request.                                            |
 | `alertThreshold`   | duration | `3s`    | `--alertThreshold`, `-a`         | `METRIK_ALERTTHRESHOLD`   | Response time above which a warning is logged.                           |
@@ -28,7 +28,9 @@ while running and apply from the next cycle; an invalid reloaded file stops the 
 | `cooldown`         | duration | `60s`   | `--cooldown`                     | `METRIK_COOLDOWN`         | How long a suspended check is skipped before one trial probe.            |
 
 Durations use Go syntax (`500ms`, `5s`, `1m30s`). Negative `failureThreshold` and `cooldown`
-values, global or per check, are rejected at startup and on reload.
+values, global or per check, are rejected at startup and on reload. So is a `runInterval` below
+`maxTries` × `requestTimeout`, checked for the global values and for each check with its overrides,
+so that a probe can use all its tries within one interval.
 
 Values are resolved in this order: flag, environment variable, config file, default. The defaults
 above are the flag defaults.
@@ -56,7 +58,7 @@ is the exception: only an omitted value inherits, so an explicit `0` disables th
 check.
 
 ```yaml
-runInterval: "10s"
+runInterval: "15s"
 maxConcurrent: 10
 requestTimeout: "5s"
 alertThreshold: "3s"

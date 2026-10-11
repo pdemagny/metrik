@@ -55,7 +55,7 @@ func main() {
 	flags := rootCmd.PersistentFlags()
 	flags.BoolVar(&debug, "debug", false, "Activate debug mode, printing data structures and useful debugging messages.")
 	flags.BoolVarP(&verbose, "verbose", "v", true, "Enable more verbose output.")
-	flags.DurationP("runInterval", "i", 10*time.Second, "Interval between each check execution.")
+	flags.DurationP("runInterval", "i", 15*time.Second, "Interval between each check execution.")
 	flags.IntP("maxConcurrent", "c", 10, "Maximum number of checks that can run concurrently.")
 	flags.DurationP("requestTimeout", "t", 5*time.Second, "Timeout for each request.")
 	flags.DurationP("alertThreshold", "a", 3*time.Second, "Duration after which a check is considered failed.")
