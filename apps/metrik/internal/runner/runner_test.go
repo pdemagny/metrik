@@ -181,7 +181,7 @@ func TestStartCycleBound(t *testing.T) {
 	logger, logs := newObserved(t)
 	alert, alerts := newAlertRecorder(t)
 
-	startCycle(t.Context(), logger, cfg, make(chan bool, maxConcurrent), breaker.New(), alert).Wait()
+	startCycle(t.Context(), logger, cfg, make(chan bool, maxConcurrent), breaker.New(), &sync.Map{}, alert).Wait()
 
 	if got := srv.peak.Load(); got > maxConcurrent {
 		t.Errorf("peak in-flight probes = %d, want <= %d", got, maxConcurrent)
@@ -211,24 +211,137 @@ func TestStartCyclesShareBound(t *testing.T) {
 		MaxConcurrent: maxConcurrent, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second, FailureThreshold: 3,
 		Checks: checksFor(srv.URL, "a0", "a1", "a2", "a3"),
 	}
+	other := cfg
+	other.Checks = checksFor(srv.URL, "b0", "b1", "b2", "b3")
 	logger, _ := newObserved(t)
 	alert, _ := newAlertRecorder(t)
 	limiterCh := make(chan bool, maxConcurrent)
 
 	// The second cycle starts while the first one still has probes in flight.
-	circuits := breaker.New()
-	first := startCycle(t.Context(), logger, cfg, limiterCh, circuits, alert)
-	second := startCycle(t.Context(), logger, cfg, limiterCh, circuits, alert)
+	circuits, inFlight := breaker.New(), &sync.Map{}
+	first := startCycle(t.Context(), logger, cfg, limiterCh, circuits, inFlight, alert)
+	second := startCycle(t.Context(), logger, other, limiterCh, circuits, inFlight, alert)
 	first.Wait()
 	second.Wait()
 
 	if got := srv.peak.Load(); got > maxConcurrent {
 		t.Errorf("peak in-flight probes across cycles = %d, want <= %d", got, maxConcurrent)
 	}
+	paths := srv.hits()
+	if len(paths) != len(cfg.Checks)+len(other.Checks) {
+		t.Errorf("probed %d distinct checks, want %d: %v", len(paths), len(cfg.Checks)+len(other.Checks), paths)
+	}
+	for p, n := range paths {
+		if n != 1 {
+			t.Errorf("%s probed %d times, want 1", p, n)
+		}
+	}
+}
+
+func TestStartCycleSkipsInFlight(t *testing.T) {
+	t.Parallel()
+	srv := newSlowServer(t)
+	cfg := config.Config{
+		MaxConcurrent: 2, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second, FailureThreshold: 3,
+		Checks: checksFor(srv.URL, "a0", "a1"),
+	}
+	logger, logs := newObserved(t)
+	alert, _ := newAlertRecorder(t)
+	limiterCh := make(chan bool, cfg.MaxConcurrent)
+	circuits, inFlight := breaker.New(), &sync.Map{}
+
+	// The second cycle starts while the probes of the first one are still running.
+	first := startCycle(t.Context(), logger, cfg, limiterCh, circuits, inFlight, alert)
+	second := startCycle(t.Context(), logger, cfg, limiterCh, circuits, inFlight, alert)
+	first.Wait()
+	second.Wait()
+
+	for p, n := range srv.hits() {
+		if n != 1 {
+			t.Errorf("%s probed %d times, want 1 (second cycle skipped)", p, n)
+		}
+	}
+	skipped := logs.FilterMessage("check skipped").FilterLevelExact(zapcore.WarnLevel).All()
+	if len(skipped) != len(cfg.Checks) {
+		t.Fatalf("check skipped entries = %d, want %d", len(skipped), len(cfg.Checks))
+	}
+	for _, e := range skipped {
+		if ctx := e.ContextMap(); ctx["reason"] != "previous probe still running" || ctx["circuit"] != nil {
+			t.Errorf("check skipped fields = %v, want only the in-flight reason", ctx)
+		}
+	}
+
+	// Finished probes release their check for the next cycle.
+	startCycle(t.Context(), logger, cfg, limiterCh, circuits, inFlight, alert).Wait()
 	for p, n := range srv.hits() {
 		if n != 2 {
-			t.Errorf("%s probed %d times, want 2 (once per cycle)", p, n)
+			t.Errorf("%s probed %d times, want 2 (released after the first probe)", p, n)
 		}
+	}
+	if got := logs.FilterMessage("check skipped").Len(); got != len(cfg.Checks) {
+		t.Errorf("check skipped entries = %d, want still %d", got, len(cfg.Checks))
+	}
+}
+
+func TestStartCycleFailedProbeReleases(t *testing.T) {
+	t.Parallel()
+	srv, hits := newHitServer(t, func(string) bool { return true })
+	disabled := 0
+	cfg := config.Config{
+		MaxConcurrent: 1, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second,
+		Checks: []*check.Check{{Name: "down", Endpoint: srv.URL + "/down", FailureThreshold: &disabled}},
+	}
+	logger, logs := newObserved(t)
+	alert, _ := newAlertRecorder(t)
+	limiterCh := make(chan bool, cfg.MaxConcurrent)
+	circuits, inFlight := breaker.New(), &sync.Map{}
+
+	for range 3 {
+		startCycle(t.Context(), logger, cfg, limiterCh, circuits, inFlight, alert).Wait()
+	}
+
+	if got := hits("/down"); got != 3 {
+		t.Errorf("hits = %d, want 3 (a failed probe releases its check)", got)
+	}
+	if got := logs.FilterMessage("check skipped").Len(); got != 0 {
+		t.Errorf("check skipped entries = %d, want 0", got)
+	}
+}
+
+func TestStartCycleInFlightSkipKeepsTrial(t *testing.T) {
+	t.Parallel()
+	var healthy atomic.Bool
+	srv, hits := newHitServer(t, func(string) bool { return !healthy.Load() })
+	cfg := config.Config{
+		MaxConcurrent: 1, MaxTries: 1, RequestTimeout: time.Second, AlertThreshold: time.Second,
+		FailureThreshold: 1, Cooldown: 30 * time.Millisecond,
+		Checks: checksFor(srv.URL, "flaky"),
+	}
+	logger, logs := newObserved(t)
+	alert, _ := newAlertRecorder(t)
+	limiterCh := make(chan bool, cfg.MaxConcurrent)
+	circuits, inFlight := breaker.New(), &sync.Map{}
+	cycle := func() { startCycle(t.Context(), logger, cfg, limiterCh, circuits, inFlight, alert).Wait() }
+
+	cycle() // Fails, opens.
+	time.Sleep(40 * time.Millisecond)
+	healthy.Store(true)
+
+	// The cool-down has elapsed, but an earlier probe of the check is still running.
+	key := cfg.Checks[0].ID()
+	inFlight.Store(key, struct{}{})
+	cycle()
+	if got := hits("/flaky"); got != 1 {
+		t.Fatalf("hits = %d, want 1 (skipped while in flight)", got)
+	}
+	inFlight.Delete(key)
+
+	cycle() // The trial probe is still available, and closes the circuit.
+	if got := hits("/flaky"); got != 2 {
+		t.Errorf("hits = %d, want 2 (trial probe ran)", got)
+	}
+	if got := logs.FilterMessage("circuit closed").Len(); got != 1 {
+		t.Errorf("circuit closed entries = %d, want 1", got)
 	}
 }
 
@@ -243,7 +356,7 @@ func TestStartCycleAlerts(t *testing.T) {
 	logger, logs := newObserved(t)
 	alert, alerts := newAlertRecorder(t)
 
-	startCycle(t.Context(), logger, cfg, make(chan bool, 1), breaker.New(), alert).Wait()
+	startCycle(t.Context(), logger, cfg, make(chan bool, 1), breaker.New(), &sync.Map{}, alert).Wait()
 
 	failed := logs.FilterMessage("check failed").FilterLevelExact(zapcore.ErrorLevel).All()
 	if len(failed) != 1 {
@@ -353,7 +466,7 @@ func TestStartCycleSkipsOpenCircuit(t *testing.T) {
 	circuits := breaker.New()
 
 	for range 3 {
-		startCycle(t.Context(), logger, cfg, limiterCh, circuits, alert).Wait()
+		startCycle(t.Context(), logger, cfg, limiterCh, circuits, &sync.Map{}, alert).Wait()
 	}
 
 	if got := hits("/bad"); got != 2 {
@@ -383,14 +496,14 @@ func TestStartCycleSkipUsesNoSlot(t *testing.T) {
 	alert, _ := newAlertRecorder(t)
 	limiterCh := make(chan bool, cfg.MaxConcurrent)
 	circuits := breaker.New()
-	startCycle(t.Context(), logger, cfg, limiterCh, circuits, alert).Wait() // Opens the circuit.
+	startCycle(t.Context(), logger, cfg, limiterCh, circuits, &sync.Map{}, alert).Wait() // Opens the circuit.
 
 	for len(limiterCh) < cap(limiterCh) {
 		limiterCh <- true
 	}
 	done := make(chan struct{})
 	go func() {
-		startCycle(t.Context(), logger, cfg, limiterCh, circuits, alert).Wait()
+		startCycle(t.Context(), logger, cfg, limiterCh, circuits, &sync.Map{}, alert).Wait()
 		close(done)
 	}()
 
@@ -416,7 +529,7 @@ func TestStartCycleTrialRecovers(t *testing.T) {
 	circuits := breaker.New()
 	cycle := func(wantHits int, step string) {
 		t.Helper()
-		startCycle(t.Context(), logger, cfg, limiterCh, circuits, alert).Wait()
+		startCycle(t.Context(), logger, cfg, limiterCh, circuits, &sync.Map{}, alert).Wait()
 		if got := hits("/flaky"); got != wantHits {
 			t.Fatalf("after %s: hits = %d, want %d", step, got, wantHits)
 		}
@@ -445,7 +558,7 @@ func TestStartCycleCircuitLogs(t *testing.T) {
 	alert, alerts := newAlertRecorder(t)
 	limiterCh := make(chan bool, cfg.MaxConcurrent)
 	circuits := breaker.New()
-	cycle := func() { startCycle(t.Context(), logger, cfg, limiterCh, circuits, alert).Wait() }
+	cycle := func() { startCycle(t.Context(), logger, cfg, limiterCh, circuits, &sync.Map{}, alert).Wait() }
 
 	cycle() // Fails.
 	cycle() // Fails, opens.
@@ -513,7 +626,7 @@ func TestStartCycleBreakerDisabled(t *testing.T) {
 	circuits := breaker.New()
 
 	for range 5 {
-		startCycle(t.Context(), logger, cfg, limiterCh, circuits, alert).Wait()
+		startCycle(t.Context(), logger, cfg, limiterCh, circuits, &sync.Map{}, alert).Wait()
 	}
 
 	if got := hits("/always"); got != 5 {
