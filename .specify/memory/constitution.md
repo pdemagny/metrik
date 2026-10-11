@@ -8,7 +8,7 @@
   module in a `go.mod` MUST be justified in the change description.
 - Code MUST NOT introduce abstractions, interfaces, or configuration knobs for requirements that
   do not exist yet (YAGNI).
-- Each app (`apps/api`, `apps/metrik`) and the IaC (`pulumi/`) remain independent Go modules;
+- Each app (`apps/demo-api`, `apps/metrik`) and the IaC (`pulumi/`) remain independent Go modules;
   shared code across them MUST NOT be introduced without an amendment-level justification.
 - Each app's `cmd/<app>/` directory (golang-standards/project-layout) MUST contain only `main` and
   the commands themselves: command definitions, flag and configuration wiring, and run start-up and
@@ -73,7 +73,7 @@ Rationale: dev and prod must be reproducible from the repository alone.
 - Repository layout: each app follows golang-standards/project-layout: `cmd/<app>/` (entry point
   and commands), `internal/` (app-specific packages), `pkg/` (reusable packages), `api/` (API
   contracts), `configs/` (configuration), and `deploy/` (Helm chart).
-- CLI: `cobra`; logging: `zap`; HTTP API contract: OpenAPI spec at `apps/api/api/openapi.json`,
+- CLI: `cobra`; logging: `zap`; HTTP API contract: OpenAPI spec at `apps/demo-api/api/openapi.json`,
   which MUST be updated in the same change as any API route or payload change.
 - Packaging: `ko` images, Helm charts; orchestration: Kubernetes (kind clusters `dev` and
   `prod` for local demos); IaC: Pulumi (Go).
@@ -104,4 +104,4 @@ Rationale: dev and prod must be reproducible from the repository alone.
 - Every plan (`/speckit-plan`) MUST include a Constitution Check; any violation MUST be recorded
   with justification in the plan's Complexity Tracking, or the design changed.
 
-**Version**: 1.2.2 | **Ratified**: 2026-09-30 | **Last Amended**: 2026-10-06
+**Version**: 1.2.3 | **Ratified**: 2026-09-30 | **Last Amended**: 2026-10-11
