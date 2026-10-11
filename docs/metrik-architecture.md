@@ -39,7 +39,9 @@ flowchart LR
     Viper --> Run["metrik run"]
     Run --> Runner["runner.Run<br/>tick every runInterval"]
     Runner --> Cycle["startCycle<br/>resolve each check"]
-    Cycle --> Gate{"breaker.Allow"}
+    Cycle --> Busy{"previous probe<br/>still running?"}
+    Busy -- "yes" --> Skip
+    Busy -- "no" --> Gate{"breaker.Allow"}
     Gate -- "open" --> Skip["log: check skipped"]
     Gate -- "closed / trial" --> Limiter["limiter<br/>maxConcurrent slots"]
     Limiter --> Probe["check.Run<br/>GET + exponential backoff<br/>up to maxTries"]
@@ -51,8 +53,8 @@ flowchart LR
     Record --> Gate
 ```
 
-Every cycle, each check is resolved against the global defaults, passes through the circuit
-breaker, then runs in its own goroutine once it gets a slot from the concurrency limiter. The
+Every cycle, each check is resolved against the global defaults, is skipped if its previous probe
+is still running, passes through the circuit breaker, then runs in its own goroutine once it gets a slot from the concurrency limiter. The
 outcome is logged at the right severity; error-level entries also go through the alert hook, and
 the result feeds the breaker. Configuration reloads apply from the next cycle.
 

@@ -24,22 +24,25 @@ func Run(ctx context.Context, logger *zap.Logger, current func() config.Config) 
 	limiterCh := make(chan bool, cfg.MaxConcurrent)
 	// Circuit state outlives cycles and config reloads.
 	circuits := breaker.New()
+	// IDs of the checks with a probe in flight, so a slow check is never probed twice at once.
+	inFlight := &sync.Map{}
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-time.Tick(current().RunInterval):
-			startCycle(ctx, logger, current(), limiterCh, circuits, notifyOnCritical(logger))
+			startCycle(ctx, logger, current(), limiterCh, circuits, inFlight, notifyOnCritical(logger))
 		}
 	}
 }
 
 // startCycle probes every check in cfg once, holding a slot of limiterCh for
-// each probe in flight. Checks whose circuit is open are skipped without taking
-// a slot, and every probe outcome is recorded in circuits. It returns once the
+// each probe in flight. Checks whose previous probe is still in inFlight, or
+// whose circuit is open, are skipped without taking a slot, and every probe
+// outcome is recorded in circuits. It returns once the
 // last probe has started (or ctx is done); the returned WaitGroup is done when
 // every started probe has been reported.
-func startCycle(ctx context.Context, logger *zap.Logger, cfg config.Config, limiterCh chan bool, circuits *breaker.Breaker, alert func(zapcore.Entry) error) *sync.WaitGroup {
+func startCycle(ctx context.Context, logger *zap.Logger, cfg config.Config, limiterCh chan bool, circuits *breaker.Breaker, inFlight *sync.Map, alert func(zapcore.Entry) error) *sync.WaitGroup {
 	wg := &sync.WaitGroup{}
 
 	checks := make([]*check.Check, 0, len(cfg.Checks))
@@ -54,9 +57,19 @@ func startCycle(ctx context.Context, logger *zap.Logger, cfg config.Config, limi
 	circuits.Keep(keys)
 
 	for _, chk := range checks {
+		key := chk.ID()
+		// Checked before the breaker, so a skipped cycle never uses up a trial probe.
+		if _, running := inFlight.Load(key); running {
+			logger.Warn("check skipped",
+				zap.String("name", chk.Name),
+				zap.String("endpoint", chk.Endpoint),
+				zap.String("reason", "previous probe still running"),
+			)
+			continue
+		}
+
 		// A zero threshold disables the breaker: probe every cycle, record nothing.
 		enabled := *chk.FailureThreshold > 0
-		key := chk.ID()
 		g := breaker.Gate{Run: true}
 		if enabled {
 			g = circuits.Allow(key, time.Now())
@@ -77,10 +90,12 @@ func startCycle(ctx context.Context, logger *zap.Logger, cfg config.Config, limi
 			return wg
 		}
 		wg.Add(1)
+		inFlight.Store(key, struct{}{})
 
 		client := check.NewClient(chk.RequestTimeout)
 		go func() {
 			defer wg.Done()
+			defer inFlight.Delete(key)
 			childlogger := logger.WithLazy(
 				zap.String("name", chk.Name),
 				zap.String("endpoint", chk.Endpoint),

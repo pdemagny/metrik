@@ -32,6 +32,9 @@ values, global or per check, are rejected at startup and on reload. So is a `run
 `maxTries` × `requestTimeout`, checked for the global values and for each check with its overrides,
 so that a probe can use all its tries within one interval.
 
+Backoff waits and `Retry-After` delays can still make a probe outlast `runInterval`. A check whose
+previous probe is still running is skipped for that cycle, so a check is never probed twice at once.
+
 Values are resolved in this order: flag, environment variable, config file, default. The defaults
 above are the flag defaults.
 
@@ -112,7 +115,7 @@ Logs are JSON on stdout.
 | `retrying ...`                               | info  | `error`, `duration` (backoff)                    |
 | `check failed`                               | error | `code`, `duration`, `error`                      |
 | `application error`                          | error | `code`, `duration`, `status`, `message`, `reason`|
-| `check skipped`                              | warn  | `circuit`, `remaining`                           |
+| `check skipped`                              | warn  | `circuit`, `remaining` (circuit open), or `reason` (previous probe still running) |
 | `circuit opened` / `reopened` / `closed`     | error / error / info | `circuit`, `failures`, `cooldown`, `suspended` |
 | `ALERT`                                      | info  | `alert` (the error message that triggered it)    |
 
