@@ -17,7 +17,6 @@ What is planned next. Items are not ordered and carry no dates.
 
 | Bug                                | Status  | Description                                                                                   |
 | :--------------------------------- | :------ | :-------------------------------------------------------------------------------------------- |
-| Zero or negative `runInterval`     | Planned | metrik starts but never probes and reports no error. The value should be rejected at startup and on reload. |
 | Zero `requestTimeout`              | Planned | The HTTP request has no timeout, so a probe of an endpoint that never answers holds its `maxConcurrent` slot indefinitely. The value should be rejected at startup and on reload. |
 
 ## Delivered
