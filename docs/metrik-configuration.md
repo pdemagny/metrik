@@ -28,9 +28,10 @@ while running and apply from the next cycle; an invalid reloaded file stops the 
 | `cooldown`         | duration | `60s`   | `--cooldown`                     | `METRIK_COOLDOWN`         | How long a suspended check is skipped before one trial probe.            |
 
 Durations use Go syntax (`500ms`, `5s`, `1m30s`). Negative `failureThreshold` and `cooldown`
-values, global or per check, are rejected at startup and on reload. So is a `runInterval` below
-`maxTries` × `requestTimeout`, checked for the global values and for each check with its overrides,
-so that a probe can use all its tries within one interval.
+values, global or per check, are rejected at startup and on reload. So is a zero or negative
+`runInterval`, and a `runInterval` below `maxTries` × `requestTimeout`, checked for the global
+values and for each check with its overrides, so that a probe can use all its tries within one
+interval.
 
 Backoff waits and `Retry-After` delays can still make a probe outlast `runInterval`. A check whose
 previous probe is still running is skipped for that cycle, so a check is never probed twice at once.

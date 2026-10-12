@@ -26,9 +26,14 @@ type (
 	}
 )
 
-// Validate rejects settings that have no meaning, such as negative circuit
-// breaker values, and a runInterval too short for a probe to use all its tries.
+// Validate rejects settings that have no meaning, such as a runInterval that is
+// not positive or negative circuit breaker values, and a runInterval too short
+// for a probe to use all its tries.
 func (cfg Config) Validate() error {
+	// A zero or negative interval never ticks, so no check would ever run.
+	if cfg.RunInterval <= 0 {
+		return fmt.Errorf("runInterval must be positive, got %s", cfg.RunInterval)
+	}
 	if tries := max(cfg.MaxTries, 1); tooShort(cfg.RunInterval, tries, cfg.RequestTimeout) {
 		return fmt.Errorf("runInterval (%s) must not be below maxTries x requestTimeout (%d x %s)",
 			cfg.RunInterval, tries, cfg.RequestTimeout)
