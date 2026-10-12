@@ -92,7 +92,7 @@ func startCycle(ctx context.Context, logger *zap.Logger, cfg config.Config, limi
 		wg.Add(1)
 		inFlight.Store(key, struct{}{})
 
-		client := check.NewClient(chk.RequestTimeout)
+		client := check.NewClient(*chk.RequestTimeout)
 		go func() {
 			defer wg.Done()
 			defer inFlight.Delete(key)

@@ -38,12 +38,12 @@ func TestResolve(t *testing.T) {
 		},
 		{
 			name:           "request timeout only",
-			check:          check.Check{RequestTimeout: time.Second},
+			check:          check.Check{RequestTimeout: new(time.Second)},
 			alertThreshold: 3 * time.Second, maxTries: 3, requestTimeout: time.Second,
 		},
 		{
 			name:           "all overridden",
-			check:          check.Check{AlertThreshold: time.Second, MaxTries: 5, RequestTimeout: 2 * time.Second},
+			check:          check.Check{AlertThreshold: time.Second, MaxTries: 5, RequestTimeout: new(2 * time.Second)},
 			alertThreshold: time.Second, maxTries: 5, requestTimeout: 2 * time.Second,
 		},
 	}
@@ -111,8 +111,11 @@ func TestResolve(t *testing.T) {
 			if got.MaxTries != tt.maxTries {
 				t.Errorf("maxTries = %d, want %d", got.MaxTries, tt.maxTries)
 			}
-			if got.RequestTimeout != tt.requestTimeout {
-				t.Errorf("requestTimeout = %s, want %s", got.RequestTimeout, tt.requestTimeout)
+			if got.RequestTimeout == nil || *got.RequestTimeout != tt.requestTimeout {
+				t.Errorf("requestTimeout = %v, want %s", got.RequestTimeout, tt.requestTimeout)
+			}
+			if in.RequestTimeout != nil && got.RequestTimeout == in.RequestTimeout {
+				t.Error("resolved requestTimeout aliases the input pointer")
 			}
 		})
 	}
@@ -144,7 +147,7 @@ func TestExampleConfigLoads(t *testing.T) {
 
 	want := []check.Check{
 		{Name: "liveness ok", Endpoint: "http://localhost:8080/v1/.well-known/live"},
-		{Name: "liveness slow timeout", Endpoint: "http://localhost:8080/v1/slow", RequestTimeout: time.Second},
+		{Name: "liveness slow timeout", Endpoint: "http://localhost:8080/v1/slow", RequestTimeout: new(time.Second)},
 		{Name: "liveness slow warn", Endpoint: "http://localhost:8080/v1/slow", AlertThreshold: 3 * time.Second},
 		{Name: "readiness flaky", Endpoint: "http://localhost:8080/v1/.well-known/ready"},
 	}
@@ -152,8 +155,14 @@ func TestExampleConfigLoads(t *testing.T) {
 		t.Fatalf("got %d checks, want %d", len(cfg.Checks), len(want))
 	}
 	for i, w := range want {
-		if *cfg.Checks[i] != w {
-			t.Errorf("checks[%d] = %+v, want %+v", i, *cfg.Checks[i], w)
+		// RequestTimeout is a pointer: compare it by value, and the other fields as a whole.
+		got := *cfg.Checks[i]
+		gotTimeout, wantTimeout := got.RequestTimeout, w.RequestTimeout
+		got.RequestTimeout, w.RequestTimeout = nil, nil
+		sameTimeout := (gotTimeout == nil) == (wantTimeout == nil) && (gotTimeout == nil || *gotTimeout == *wantTimeout)
+		if got != w || !sameTimeout {
+			t.Errorf("checks[%d] = %+v (requestTimeout %v), want %+v (requestTimeout %v)",
+				i, got, gotTimeout, w, wantTimeout)
 		}
 	}
 }
@@ -169,7 +178,41 @@ func TestValidate(t *testing.T) {
 	}{
 		{
 			name: "zeros and unset are valid",
+			cfg:  Config{RunInterval: time.Second, RequestTimeout: time.Second, Checks: []*check.Check{{Name: "x"}}},
+		},
+		{
+			name: "zero global timeout",
 			cfg:  Config{RunInterval: time.Second, Checks: []*check.Check{{Name: "x"}}},
+			want: []string{"requestTimeout must be positive", "0s"},
+		},
+		{
+			name: "negative global timeout",
+			cfg:  Config{RunInterval: time.Second, RequestTimeout: -time.Second},
+			want: []string{"requestTimeout must be positive", "-1s"},
+		},
+		{
+			name: "zero global timeout, checks with their own",
+			cfg: Config{
+				RunInterval: 15 * time.Second,
+				Checks:      []*check.Check{{Name: "x", RequestTimeout: new(3 * time.Second)}},
+			},
+			want: []string{"requestTimeout must be positive", "0s"},
+		},
+		{
+			name: "zero check timeout",
+			cfg: Config{
+				RunInterval: time.Second, RequestTimeout: time.Second,
+				Checks: []*check.Check{{Name: "x", RequestTimeout: new(time.Duration(0))}},
+			},
+			want: []string{`check "x"`, "requestTimeout must be positive", "0s"},
+		},
+		{
+			name: "negative check timeout",
+			cfg: Config{
+				RunInterval: time.Second, RequestTimeout: time.Second,
+				Checks: []*check.Check{{Name: "x", RequestTimeout: new(-time.Second)}},
+			},
+			want: []string{`check "x"`, "requestTimeout must be positive", "-1s"},
 		},
 		{
 			name: "zero run interval",
@@ -193,22 +236,28 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			name: "negative global threshold",
-			cfg:  Config{RunInterval: time.Second, FailureThreshold: -1},
+			cfg:  Config{RunInterval: time.Second, RequestTimeout: time.Second, FailureThreshold: -1},
 			want: []string{"failureThreshold", "must not be negative"},
 		},
 		{
 			name: "negative global cooldown",
-			cfg:  Config{RunInterval: time.Second, Cooldown: -5 * time.Second},
+			cfg:  Config{RunInterval: time.Second, RequestTimeout: time.Second, Cooldown: -5 * time.Second},
 			want: []string{"cooldown", "must not be negative"},
 		},
 		{
 			name: "negative check threshold",
-			cfg:  Config{RunInterval: time.Second, Checks: []*check.Check{{Name: "x", FailureThreshold: &negative}}},
+			cfg: Config{
+				RunInterval: time.Second, RequestTimeout: time.Second,
+				Checks: []*check.Check{{Name: "x", FailureThreshold: &negative}},
+			},
 			want: []string{`check "x"`, "failureThreshold", "must not be negative"},
 		},
 		{
 			name: "negative check cooldown",
-			cfg:  Config{RunInterval: time.Second, Checks: []*check.Check{{Name: "x", Cooldown: -5 * time.Second}}},
+			cfg: Config{
+				RunInterval: time.Second, RequestTimeout: time.Second,
+				Checks: []*check.Check{{Name: "x", Cooldown: -5 * time.Second}},
+			},
 			want: []string{`check "x"`, "cooldown", "must not be negative"},
 		},
 		{
@@ -239,7 +288,7 @@ func TestValidate(t *testing.T) {
 			name: "check timeout override breaks the rule",
 			cfg: Config{
 				RunInterval: 15 * time.Second, MaxTries: 3, RequestTimeout: 5 * time.Second,
-				Checks: []*check.Check{{Name: "x", RequestTimeout: 6 * time.Second}},
+				Checks: []*check.Check{{Name: "x", RequestTimeout: new(6 * time.Second)}},
 			},
 			want: []string{`check "x"`, "runInterval (15s)", "(3 x 6s)"},
 		},
@@ -255,7 +304,7 @@ func TestValidate(t *testing.T) {
 			name: "check overrides within the rule",
 			cfg: Config{
 				RunInterval: 15 * time.Second, MaxTries: 3, RequestTimeout: 5 * time.Second,
-				Checks: []*check.Check{{Name: "x", MaxTries: 5, RequestTimeout: 3 * time.Second}},
+				Checks: []*check.Check{{Name: "x", MaxTries: 5, RequestTimeout: new(3 * time.Second)}},
 			},
 		},
 	}
