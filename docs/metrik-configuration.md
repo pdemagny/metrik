@@ -29,9 +29,9 @@ while running and apply from the next cycle; an invalid reloaded file stops the 
 
 Durations use Go syntax (`500ms`, `5s`, `1m30s`). Negative `failureThreshold` and `cooldown`
 values, global or per check, are rejected at startup and on reload. So is a zero or negative
-`runInterval`, and a `runInterval` below `maxTries` × `requestTimeout`, checked for the global
-values and for each check with its overrides, so that a probe can use all its tries within one
-interval.
+`runInterval` or `requestTimeout`, global or per check, and a `runInterval` below `maxTries` ×
+`requestTimeout`, checked for the global values and for each check with its overrides, so that a
+probe can use all its tries within one interval.
 
 Backoff waits and `Retry-After` delays can still make a probe outlast `runInterval`. A check whose
 previous probe is still running is skipped for that cycle, so a check is never probed twice at once.
@@ -53,13 +53,14 @@ above are the flag defaults.
 | `endpoint`         | string   |    ✅     |                        | URL probed with an HTTP `GET`.                               |
 | `alertThreshold`   | duration |    ❌     | global `alertThreshold`   | Per-check slow response threshold.                        |
 | `maxTries`         | uint     |    ❌     | global `maxTries`         | Per-check attempts.                                       |
-| `requestTimeout`   | duration |    ❌     | global `requestTimeout`  | Per-check request timeout.                                 |
+| `requestTimeout`   | duration |    ❌     | global `requestTimeout`  | Per-check request timeout. Must be positive when set.      |
 | `failureThreshold` | int      |    ❌     | global `failureThreshold` | Per-check breaker threshold; `0` never suspends the check. |
 | `cooldown`         | duration |    ❌     | global `cooldown`        | Per-check cooldown.                                         |
 
 A per-check value of zero (or an omitted one) falls back to the global value. `failureThreshold`
-is the exception: only an omitted value inherits, so an explicit `0` disables the breaker for that
-check.
+and `requestTimeout` are the exceptions: only an omitted value inherits. An explicit
+`failureThreshold` of `0` disables the breaker for that check, and an explicit `requestTimeout` of
+`0` is rejected.
 
 ```yaml
 runInterval: "15s"

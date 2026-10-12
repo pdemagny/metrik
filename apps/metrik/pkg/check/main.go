@@ -29,7 +29,8 @@ type (
 		Endpoint       string        `yaml:"endpoint"`
 		AlertThreshold time.Duration `yaml:"alertThreshold"`
 		MaxTries       uint          `yaml:"maxTries"`
-		RequestTimeout time.Duration `yaml:"requestTimeout,omitempty"`
+		// RequestTimeout is nil to inherit the global value; when set it must be positive.
+		RequestTimeout *time.Duration `yaml:"requestTimeout,omitempty"`
 		// FailureThreshold is nil to inherit the global value; 0 disables the circuit breaker.
 		FailureThreshold *int          `yaml:"failureThreshold,omitempty"`
 		Cooldown         time.Duration `yaml:"cooldown,omitempty"`
