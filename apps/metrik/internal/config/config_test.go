@@ -1,6 +1,7 @@
 package config
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +10,19 @@ import (
 
 	"github.com/spf13/viper"
 )
+
+// wantResolved fails the test when got is nil, differs from want, or aliases in.
+func wantResolved[T comparable](t *testing.T, field string, got, in *T, want T) {
+	t.Helper()
+	switch {
+	case got == nil:
+		t.Errorf("%s = nil, want %v", field, want)
+	case *got != want:
+		t.Errorf("%s = %v, want %v", field, *got, want)
+	case got == in:
+		t.Errorf("resolved %s aliases the input pointer", field)
+	}
+}
 
 func TestResolve(t *testing.T) {
 	t.Parallel()
@@ -28,12 +42,12 @@ func TestResolve(t *testing.T) {
 		},
 		{
 			name:           "alert threshold only",
-			check:          check.Check{AlertThreshold: time.Second},
+			check:          check.Check{AlertThreshold: new(time.Second)},
 			alertThreshold: time.Second, maxTries: 3, requestTimeout: 5 * time.Second,
 		},
 		{
 			name:           "max tries only",
-			check:          check.Check{MaxTries: 5},
+			check:          check.Check{MaxTries: new(uint(5))},
 			alertThreshold: 3 * time.Second, maxTries: 5, requestTimeout: 5 * time.Second,
 		},
 		{
@@ -43,8 +57,18 @@ func TestResolve(t *testing.T) {
 		},
 		{
 			name:           "all overridden",
-			check:          check.Check{AlertThreshold: time.Second, MaxTries: 5, RequestTimeout: new(2 * time.Second)},
+			check:          check.Check{AlertThreshold: new(time.Second), MaxTries: new(uint(5)), RequestTimeout: new(2 * time.Second)},
 			alertThreshold: time.Second, maxTries: 5, requestTimeout: 2 * time.Second,
+		},
+		{
+			name:           "zero alert threshold is kept",
+			check:          check.Check{AlertThreshold: new(time.Duration(0))},
+			alertThreshold: 0, maxTries: 3, requestTimeout: 5 * time.Second,
+		},
+		{
+			name:           "zero max tries counts as one",
+			check:          check.Check{MaxTries: new(uint(0))},
+			alertThreshold: 3 * time.Second, maxTries: 1, requestTimeout: 5 * time.Second,
 		},
 	}
 
@@ -62,29 +86,21 @@ func TestResolve(t *testing.T) {
 			{name: "inherited", check: check.Check{}, threshold: 3, cooldown: time.Minute},
 			{name: "disabled", check: check.Check{FailureThreshold: &zero}, threshold: 0, cooldown: time.Minute},
 			{name: "threshold override", check: check.Check{FailureThreshold: &five}, threshold: 5, cooldown: time.Minute},
-			{name: "cooldown override", check: check.Check{Cooldown: 2 * time.Minute}, threshold: 3, cooldown: 2 * time.Minute},
+			{name: "cooldown override", check: check.Check{Cooldown: new(2 * time.Minute)}, threshold: 3, cooldown: 2 * time.Minute},
+			{name: "zero cooldown is kept", check: check.Check{Cooldown: new(time.Duration(0))}, threshold: 3, cooldown: 0},
 		}
 		for _, tt := range tests {
 			in := tt.check
 			got := settings.Resolve(&in)
-			if got.FailureThreshold == nil || *got.FailureThreshold != tt.threshold {
-				t.Errorf("%s: failureThreshold = %v, want %d", tt.name, got.FailureThreshold, tt.threshold)
-			}
-			if in.FailureThreshold != nil && got.FailureThreshold == in.FailureThreshold {
-				t.Errorf("%s: resolved failureThreshold aliases the input pointer", tt.name)
-			}
-			if got.Cooldown != tt.cooldown {
-				t.Errorf("%s: cooldown = %s, want %s", tt.name, got.Cooldown, tt.cooldown)
-			}
+			wantResolved(t, tt.name+": failureThreshold", got.FailureThreshold, in.FailureThreshold, tt.threshold)
+			wantResolved(t, tt.name+": cooldown", got.Cooldown, in.Cooldown, tt.cooldown)
 		}
 	})
 
 	t.Run("zero max tries everywhere stays bounded", func(t *testing.T) {
 		t.Parallel()
 		got := Config{}.Resolve(&check.Check{})
-		if got.MaxTries != 1 {
-			t.Errorf("maxTries = %d, want 1", got.MaxTries)
-		}
+		wantResolved(t, "maxTries", got.MaxTries, nil, 1)
 	})
 
 	for _, tt := range tests {
@@ -105,18 +121,9 @@ func TestResolve(t *testing.T) {
 			if got.Name != in.Name || got.Endpoint != in.Endpoint {
 				t.Errorf("name/endpoint = %q/%q, want %q/%q", got.Name, got.Endpoint, in.Name, in.Endpoint)
 			}
-			if got.AlertThreshold != tt.alertThreshold {
-				t.Errorf("alertThreshold = %s, want %s", got.AlertThreshold, tt.alertThreshold)
-			}
-			if got.MaxTries != tt.maxTries {
-				t.Errorf("maxTries = %d, want %d", got.MaxTries, tt.maxTries)
-			}
-			if got.RequestTimeout == nil || *got.RequestTimeout != tt.requestTimeout {
-				t.Errorf("requestTimeout = %v, want %s", got.RequestTimeout, tt.requestTimeout)
-			}
-			if in.RequestTimeout != nil && got.RequestTimeout == in.RequestTimeout {
-				t.Error("resolved requestTimeout aliases the input pointer")
-			}
+			wantResolved(t, "alertThreshold", got.AlertThreshold, in.AlertThreshold, tt.alertThreshold)
+			wantResolved(t, "maxTries", got.MaxTries, in.MaxTries, tt.maxTries)
+			wantResolved(t, "requestTimeout", got.RequestTimeout, in.RequestTimeout, tt.requestTimeout)
 		})
 	}
 }
@@ -148,21 +155,57 @@ func TestExampleConfigLoads(t *testing.T) {
 	want := []check.Check{
 		{Name: "liveness ok", Endpoint: "http://localhost:8080/v1/.well-known/live"},
 		{Name: "liveness slow timeout", Endpoint: "http://localhost:8080/v1/slow", RequestTimeout: new(time.Second)},
-		{Name: "liveness slow warn", Endpoint: "http://localhost:8080/v1/slow", AlertThreshold: 3 * time.Second},
+		{Name: "liveness slow warn", Endpoint: "http://localhost:8080/v1/slow", AlertThreshold: new(3 * time.Second)},
 		{Name: "readiness flaky", Endpoint: "http://localhost:8080/v1/.well-known/ready"},
 	}
 	if len(cfg.Checks) != len(want) {
 		t.Fatalf("got %d checks, want %d", len(cfg.Checks), len(want))
 	}
 	for i, w := range want {
-		// RequestTimeout is a pointer: compare it by value, and the other fields as a whole.
-		got := *cfg.Checks[i]
-		gotTimeout, wantTimeout := got.RequestTimeout, w.RequestTimeout
-		got.RequestTimeout, w.RequestTimeout = nil, nil
-		sameTimeout := (gotTimeout == nil) == (wantTimeout == nil) && (gotTimeout == nil || *gotTimeout == *wantTimeout)
-		if got != w || !sameTimeout {
-			t.Errorf("checks[%d] = %+v (requestTimeout %v), want %+v (requestTimeout %v)",
-				i, got, gotTimeout, w, wantTimeout)
+		// DeepEqual compares the pointer settings by value.
+		if !reflect.DeepEqual(*cfg.Checks[i], w) {
+			t.Errorf("checks[%d] = %+v, want %+v", i, *cfg.Checks[i], w)
+		}
+	}
+}
+
+// Only an omitted per-check setting decodes to nil; an explicit zero is kept.
+func TestDecodeCheckSettings(t *testing.T) {
+	t.Parallel()
+	v := viper.New()
+	v.SetConfigType("yaml")
+	const doc = `
+checks:
+  - name: "omitted"
+  - name: "zeros"
+    alertThreshold: "0s"
+    maxTries: 0
+    requestTimeout: "0s"
+    failureThreshold: 0
+    cooldown: "0s"
+`
+	if err := v.ReadConfig(strings.NewReader(doc)); err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	var cfg Config
+	if err := v.Unmarshal(&cfg); err != nil {
+		t.Fatalf("decode config: %v", err)
+	}
+
+	want := []check.Check{
+		{Name: "omitted"},
+		{
+			Name:           "zeros",
+			AlertThreshold: new(time.Duration(0)), MaxTries: new(uint(0)), RequestTimeout: new(time.Duration(0)),
+			FailureThreshold: new(0), Cooldown: new(time.Duration(0)),
+		},
+	}
+	if len(cfg.Checks) != len(want) {
+		t.Fatalf("got %d checks, want %d", len(cfg.Checks), len(want))
+	}
+	for i, w := range want {
+		if !reflect.DeepEqual(*cfg.Checks[i], w) {
+			t.Errorf("checks[%d] = %+v, want %+v", i, *cfg.Checks[i], w)
 		}
 	}
 }
@@ -256,7 +299,7 @@ func TestValidate(t *testing.T) {
 			name: "negative check cooldown",
 			cfg: Config{
 				RunInterval: time.Second, RequestTimeout: time.Second,
-				Checks: []*check.Check{{Name: "x", Cooldown: -5 * time.Second}},
+				Checks: []*check.Check{{Name: "x", Cooldown: new(-5 * time.Second)}},
 			},
 			want: []string{`check "x"`, "cooldown", "must not be negative"},
 		},
@@ -296,7 +339,7 @@ func TestValidate(t *testing.T) {
 			name: "check tries override breaks the rule",
 			cfg: Config{
 				RunInterval: 15 * time.Second, MaxTries: 3, RequestTimeout: 5 * time.Second,
-				Checks: []*check.Check{{Name: "x", MaxTries: 4}},
+				Checks: []*check.Check{{Name: "x", MaxTries: new(uint(4))}},
 			},
 			want: []string{`check "x"`, "runInterval (15s)", "(4 x 5s)"},
 		},
@@ -304,7 +347,7 @@ func TestValidate(t *testing.T) {
 			name: "check overrides within the rule",
 			cfg: Config{
 				RunInterval: 15 * time.Second, MaxTries: 3, RequestTimeout: 5 * time.Second,
-				Checks: []*check.Check{{Name: "x", MaxTries: 5, RequestTimeout: new(3 * time.Second)}},
+				Checks: []*check.Check{{Name: "x", MaxTries: new(uint(5)), RequestTimeout: new(3 * time.Second)}},
 			},
 		},
 	}
