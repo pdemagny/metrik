@@ -167,25 +167,48 @@ func TestValidate(t *testing.T) {
 		cfg  Config
 		want []string // Substrings of the error; nil means no error.
 	}{
-		{name: "zeros and unset are valid", cfg: Config{Checks: []*check.Check{{Name: "x"}}}},
+		{
+			name: "zeros and unset are valid",
+			cfg:  Config{RunInterval: time.Second, Checks: []*check.Check{{Name: "x"}}},
+		},
+		{
+			name: "zero run interval",
+			cfg:  Config{Checks: []*check.Check{{Name: "x"}}},
+			want: []string{"runInterval must be positive", "0s"},
+		},
+		{
+			name: "negative run interval",
+			cfg:  Config{RunInterval: -5 * time.Second, Checks: []*check.Check{{Name: "x"}}},
+			want: []string{"runInterval must be positive", "-5s"},
+		},
+		{
+			name: "zero run interval, negative timeout",
+			cfg:  Config{RequestTimeout: -time.Second},
+			want: []string{"runInterval must be positive", "0s"},
+		},
+		{
+			name: "zero run interval, positive timeout",
+			cfg:  Config{MaxTries: 3, RequestTimeout: 5 * time.Second},
+			want: []string{"runInterval must be positive", "0s"},
+		},
 		{
 			name: "negative global threshold",
-			cfg:  Config{FailureThreshold: -1},
+			cfg:  Config{RunInterval: time.Second, FailureThreshold: -1},
 			want: []string{"failureThreshold", "must not be negative"},
 		},
 		{
 			name: "negative global cooldown",
-			cfg:  Config{Cooldown: -5 * time.Second},
+			cfg:  Config{RunInterval: time.Second, Cooldown: -5 * time.Second},
 			want: []string{"cooldown", "must not be negative"},
 		},
 		{
 			name: "negative check threshold",
-			cfg:  Config{Checks: []*check.Check{{Name: "x", FailureThreshold: &negative}}},
+			cfg:  Config{RunInterval: time.Second, Checks: []*check.Check{{Name: "x", FailureThreshold: &negative}}},
 			want: []string{`check "x"`, "failureThreshold", "must not be negative"},
 		},
 		{
 			name: "negative check cooldown",
-			cfg:  Config{Checks: []*check.Check{{Name: "x", Cooldown: -5 * time.Second}}},
+			cfg:  Config{RunInterval: time.Second, Checks: []*check.Check{{Name: "x", Cooldown: -5 * time.Second}}},
 			want: []string{`check "x"`, "cooldown", "must not be negative"},
 		},
 		{
