@@ -105,22 +105,22 @@ func startCycle(ctx context.Context, logger *zap.Logger, cfg config.Config, limi
 			results, err := chk.Run(ctx, childlogger, client)
 			<-limiterCh
 
-			failed := report(childlogger, alert, results, err, chk.AlertThreshold)
+			failed := report(childlogger, alert, results, err, *chk.AlertThreshold)
 			if !enabled {
 				return
 			}
 			// Transitions go through childlogger, which has no alert hook: the failed probe already alerted.
-			switch ch := circuits.Record(key, g.Trial, failed, *chk.FailureThreshold, chk.Cooldown, time.Now()); ch.Kind {
+			switch ch := circuits.Record(key, g.Trial, failed, *chk.FailureThreshold, *chk.Cooldown, time.Now()); ch.Kind {
 			case breaker.Opened:
 				childlogger.Error("circuit opened",
 					zap.String("circuit", string(breaker.Open)),
 					zap.Int("failures", ch.Failures),
-					zap.Duration("cooldown", chk.Cooldown),
+					zap.Duration("cooldown", *chk.Cooldown),
 				)
 			case breaker.Reopened:
 				childlogger.Error("circuit reopened",
 					zap.String("circuit", string(breaker.Open)),
-					zap.Duration("cooldown", chk.Cooldown),
+					zap.Duration("cooldown", *chk.Cooldown),
 				)
 			case breaker.Recovered:
 				childlogger.Info("circuit closed",

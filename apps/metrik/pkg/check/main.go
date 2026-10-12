@@ -25,15 +25,17 @@ type (
 		Body     *APIResponse  `json:"body"`
 	}
 	Check struct {
-		Name           string        `yaml:"name"`
-		Endpoint       string        `yaml:"endpoint"`
-		AlertThreshold time.Duration `yaml:"alertThreshold"`
-		MaxTries       uint          `yaml:"maxTries"`
-		// RequestTimeout is nil to inherit the global value; when set it must be positive.
+		Name     string `yaml:"name"`
+		Endpoint string `yaml:"endpoint"`
+		// The settings below are nil to inherit the global value. A value that is
+		// set, zero included, is used as is and never replaced by the global one.
+		AlertThreshold *time.Duration `yaml:"alertThreshold,omitempty"`
+		MaxTries       *uint          `yaml:"maxTries,omitempty"`
+		// RequestTimeout must be positive when set.
 		RequestTimeout *time.Duration `yaml:"requestTimeout,omitempty"`
-		// FailureThreshold is nil to inherit the global value; 0 disables the circuit breaker.
-		FailureThreshold *int          `yaml:"failureThreshold,omitempty"`
-		Cooldown         time.Duration `yaml:"cooldown,omitempty"`
+		// FailureThreshold disables the circuit breaker when 0.
+		FailureThreshold *int           `yaml:"failureThreshold,omitempty"`
+		Cooldown         *time.Duration `yaml:"cooldown,omitempty"`
 	}
 )
 
@@ -108,11 +110,17 @@ func (c *Check) Run(ctx context.Context, logger *zap.Logger, client *http.Client
 		return c, nil
 	}
 
+	// A check that was not resolved gets a single try; zero would mean unlimited retries.
+	tries := uint(1)
+	if c.MaxTries != nil {
+		tries = *c.MaxTries
+	}
+
 	_, err = backoff.Retry(
 		ctx,
 		operation,
 		backoff.WithBackOff(backoff.NewExponentialBackOff()),
-		backoff.WithMaxTries(c.MaxTries),
+		backoff.WithMaxTries(tries),
 		backoff.WithNotify(func(err error, duration time.Duration) {
 			logger.Info("retrying ...",
 				zap.Error(err),

@@ -52,15 +52,15 @@ above are the flag defaults.
 | `name`             | string   |    ✅     |                        | Name used in logs. With `endpoint`, it identifies the check. |
 | `endpoint`         | string   |    ✅     |                        | URL probed with an HTTP `GET`.                               |
 | `alertThreshold`   | duration |    ❌     | global `alertThreshold`   | Per-check slow response threshold.                        |
-| `maxTries`         | uint     |    ❌     | global `maxTries`         | Per-check attempts.                                       |
+| `maxTries`         | uint     |    ❌     | global `maxTries`         | Per-check attempts. `0` is treated as `1`.                |
 | `requestTimeout`   | duration |    ❌     | global `requestTimeout`  | Per-check request timeout. Must be positive when set.      |
 | `failureThreshold` | int      |    ❌     | global `failureThreshold` | Per-check breaker threshold; `0` never suspends the check. |
 | `cooldown`         | duration |    ❌     | global `cooldown`        | Per-check cooldown.                                         |
 
-A per-check value of zero (or an omitted one) falls back to the global value. `failureThreshold`
-and `requestTimeout` are the exceptions: only an omitted value inherits. An explicit
-`failureThreshold` of `0` disables the breaker for that check, and an explicit `requestTimeout` of
-`0` is rejected.
+Only an omitted per-check setting inherits the global value. A value set on a check, zero included,
+is used as is and follows the same rules as the global setting: a `failureThreshold` of `0`
+disables the breaker for that check, a `maxTries` of `0` is treated as `1`, and a `requestTimeout`
+of `0` is rejected.
 
 ```yaml
 runInterval: "15s"
