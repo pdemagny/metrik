@@ -13,12 +13,6 @@ What is planned next. Items are not ordered and carry no dates.
 | Notification channels    | Planned | Replace the log-based alert hook (`ALERT` entries) with real notifications, such as email or Slack messages. |
 | Registry-based delivery  | Planned | Build and publish images in continuous integration instead of loading them into kind, and deploy from the registry. |
 
-## Bugs to fix
-
-| Bug                                | Status  | Description                                                                                   |
-| :--------------------------------- | :------ | :-------------------------------------------------------------------------------------------- |
-| Zero `requestTimeout`              | Planned | The HTTP request has no timeout, so a probe of an endpoint that never answers holds its `maxConcurrent` slot indefinitely. The value should be rejected at startup and on reload. |
-
 ## Delivered
 
 - Parallel checks bounded by `maxConcurrent`
