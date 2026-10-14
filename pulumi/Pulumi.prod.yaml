@@ -1,15 +1,23 @@
 config:
   global:debug: false
   global:enableComponentResources: true
-  kubernetes:context: kind-prod
+  kubernetes:context: gke_floci-local_europe-west1_dev-gke-1
+  metrik:registryServer: ghcr.io
+  metrik:registryUsername: pdemagny
   metrik:releases:
     - name: demo-api
       namespace: demo-api
       chartPath: "../apps/demo-api/deploy/chart/demo-api/"
       chartValuesFilePath: "../apps/demo-api/configs/prod-values.yaml"
       chartVersion: "0.1.0"
+      image:
+        repository: ghcr.io/pdemagny/demo-api
+        tag: "0.1.0"
     - name: metrik
       namespace: metrik
       chartPath: "../apps/metrik/deploy/chart/metrik/"
       chartValuesFilePath: "../apps/metrik/configs/prod-values.yaml"
       chartVersion: "0.1.0"
+      image:
+        repository: ghcr.io/pdemagny/metrik
+        tag: "0.1.0"
