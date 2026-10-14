@@ -18,27 +18,89 @@ env:
   MISE_TASK_RUN_AUTO_INSTALL: "false"
 
 jobs:
-  check:
+  # List the Go modules (and apps) touched since the base of the pull request or the previous
+  # push. A change to the tools, the lint config or this workflow touches every module.
+  changes:
     if: github.ref_type != 'tag'
     runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.diff.outputs.modules }}
+      apps: ${{ steps.diff.outputs.apps }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
         with:
-          install_args: go golangci-lint
-          cache: true
-      - run: mise run lint
-      - run: mise run test
+          fetch-depth: 0
+      - name: Diff
+        id: diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          all='["apps/demo-api","apps/metrik","pulumi"]'
+          shared='^(\.mise\.toml|\.golangci\.yaml|\.github/workflows/images\.yaml)$'
+          # A new branch or an unknown base has nothing to diff against: check everything.
+          if [[ -z "${BASE}" ]] || ! files=$(git diff --name-only "${BASE}...HEAD" 2>/dev/null) ||
+            grep -qE "${shared}" <<< "${files}"; then
+            modules="${all}"
+          else
+            modules=$(jq -Rnc --argjson all "${all}" \
+              '[inputs] as $files | $all | map(select(. as $m | $files | any(startswith($m + "/"))))' \
+              <<< "${files}")
+          fi
+          echo "modules=${modules}" >> "${GITHUB_OUTPUT}"
+          echo "apps=$(jq -c 'map(select(startswith("apps/")) | ltrimstr("apps/"))' <<< "${modules}")" \
+            >> "${GITHUB_OUTPUT}"
+          echo "Changed modules: ${modules}"
 
-  # Pull requests: prove both images build, with a read-only token and no push.
-  build:
-    needs: check
-    if: github.event_name == 'pull_request'
+  # Lint and test each changed module in parallel jobs.
+  check:
+    needs: changes
+    if: needs.changes.outputs.modules != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        app: [metrik, demo-api]
+        module: ${{ fromJSON(needs.changes.outputs.modules) }}
+        task: [lint, test]
+    env:
+      MODULES: ${{ matrix.module }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
+        with:
+          install_args: ${{ matrix.task == 'lint' && 'go golangci-lint' || 'go' }}
+          cache: true
+      # Compiling the dependencies is most of the run: keep the module and build caches. Only
+      # main saves them, so pull requests reuse its caches without filling the repository quota.
+      - name: Restore Go caches
+        id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            ~/.cache/golangci-lint
+          key: go-${{ matrix.module }}-${{ matrix.task }}-${{ hashFiles('.mise.toml', format('{0}/go.sum', matrix.module)) }}
+          restore-keys: go-${{ matrix.module }}-${{ matrix.task }}-
+      - run: mise run "${{ matrix.task }}"
+      - name: Save Go caches
+        if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            ~/.cache/golangci-lint
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+  # Pull requests: prove the changed images build, with a read-only token and no push.
+  build:
+    needs: [changes, check]
+    if: github.event_name == 'pull_request' && needs.changes.outputs.apps != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.changes.outputs.apps) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
@@ -53,10 +115,13 @@ jobs:
           ko build "./cmd/${APP}" --base-import-paths \
             --platform=linux/amd64,linux/arm64 --push=false
 
-  # main: push sha-<short>, attest the SBOMs and sign.
+  # main: push sha-<short>, attest the SBOMs and sign. Every commit publishes, even when no module
+  # changed, so that any commit of main can be released.
   publish:
-    needs: check
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [changes, check]
+    if: >-
+      !cancelled() && !contains(needs.*.result, 'failure')
+      && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
