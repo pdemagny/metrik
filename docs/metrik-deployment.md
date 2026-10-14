@@ -6,46 +6,47 @@ weight: 30
 # Deployment
 
 Metrik ships as a container image (built with [ko](https://ko.build)) and a Helm chart, deployed
-by a Pulumi program. The repository demonstrates this on two local [kind](https://kind.sigs.k8s.io)
-clusters, `dev` and `prod`.
+by a Pulumi program. The repository has two stacks:
+
+- `dev` runs on a local [kind](https://kind.sigs.k8s.io) cluster. Images are built on your machine
+  and loaded straight onto its nodes, so no registry is involved.
+- `prod` runs on a remote Kubernetes cluster and pulls signed images published to ghcr.io by the
+  repository's `images` workflow.
+
+The image source is stack configuration only. The same charts and values files work with any
+registry. All commands run from the repository root.
+
+## Prerequisites
+
+- The tools of the [getting started](../README.md#getting-started) section (`mise install`).
+- A Pulumi Cloud account (free tier available) and `pulumi login`. Skip this if you already have
+  an organization where you can create projects and stacks.
+- For `dev`: Docker (kind runs its nodes as containers).
+- For `prod`: a kubeconfig context for the remote cluster, and read access to the registry.
+
+## Local deployment (dev on kind)
 
 > [!WARNING]
 > kind is for demonstration only, never use it in production.
 
-> [!IMPORTANT]
-> Normally images are built in CI and pushed to a registry. This guide builds them straight into
-> the kind clusters. All commands run from the repository root.
-
-## Prerequisites
-
-- The tools of the [getting started](../README.md#getting-started) section, plus Docker (kind runs its
-  nodes as containers).
-- A Pulumi Cloud account (free tier available) and `pulumi login`. Skip this if you already have
-  an organization where you can create projects and stacks.
-
-## 1. Create the clusters
+### 1. Create the cluster
 
 ```shell
-for cluster in dev prod; do
-    kind create cluster --name "${cluster}" --image kindest/node:v1.37.0 --wait 5m
-done
+kind create cluster --name dev --image kindest/node:v1.37.0 --wait 5m
 ```
 
-## 2. Build and deploy
+### 2. Build and deploy
 
-The stack deploys both the Demo API and Metrik, so build both images.
+The stack deploys both the Demo API and Metrik, so build both images. `KO_DOCKER_REPO=kind.local`
+tells ko to load them onto the kind nodes instead of pushing them.
 
 ```shell
-# Dev
 kubectx kind-dev
 export KO_DOCKER_REPO=kind.local KIND_CLUSTER_NAME=dev
 (cd apps/demo-api/ && ko build ./cmd/demo-api --base-import-paths -t 0.1.0)
 (cd apps/metrik/ && ko build ./cmd/metrik --base-import-paths -t 0.1.0)
 (cd pulumi/ && pulumi up --stack dev --config-file Pulumi.dev.yaml)
 ```
-
-For prod, repeat with `kind-prod`, `KIND_CLUSTER_NAME=prod`, `--stack prod` and
-`Pulumi.prod.yaml`.
 
 Pulumi creates one namespace per release (`<stack>-<namespace>`, with the `restricted` pod
 security level enforced) and one Helm release per entry of the stack's `metrik:releases`:
@@ -59,6 +60,7 @@ config:
       chartPath: "../apps/metrik/deploy/chart/metrik/"
       chartValuesFilePath: "../apps/metrik/configs/dev-values.yaml"
       chartVersion: "0.1.0"
+      # image: ...   # optional, see "Remote deployment"; dev takes the image from its values file
 ```
 
 Check the result and read the logs:
@@ -67,6 +69,155 @@ Check the result and read the logs:
 kubectl get pods --all-namespaces | grep -E 'demo-api|metrik'
 kubectl logs -n dev-metrik deploy/dev-metrik --follow
 ```
+
+## Remote deployment (prod from a registry)
+
+`prod` deploys released images from the repository's private ghcr.io packages. See
+[Published images](#published-images) for how they are built and tagged.
+
+### 1. Get a read credential
+
+Create a GitHub personal access token **(classic)** with only the `read:packages` scope. GitHub
+Packages does not accept fine-grained tokens for pulling images.
+
+### 2. Configure the stack
+
+`pulumi/Pulumi.prod.yaml` holds everything about where images come from:
+
+```yaml
+config:
+  kubernetes:context: <your remote cluster context>
+  metrik:registryServer: ghcr.io
+  metrik:registryUsername: <your GitHub user>
+  metrik:releases:
+    - name: metrik
+      namespace: metrik
+      chartPath: "../apps/metrik/deploy/chart/metrik/"
+      chartValuesFilePath: "../apps/metrik/configs/prod-values.yaml"
+      chartVersion: "0.1.0"
+      image:
+        repository: ghcr.io/pdemagny/metrik
+        tag: "0.1.0"
+        # digest: sha256:...   # optional: pin the exact image
+```
+
+Store the token encrypted in the stack, never in plain text:
+
+```shell
+(cd pulumi/ && pulumi config set --stack prod --secret metrik:registryPassword "<token>")
+```
+
+`image` overrides the image of the values file. `tag` is a release (`X.Y.Z`) or a `main` build
+(`sha-<7 hex>`). Adding `digest` pins the exact image even if a tag were ever moved. Find it with:
+
+```shell
+crane digest ghcr.io/pdemagny/metrik:0.1.0
+```
+
+### 3. Deploy
+
+```shell
+(cd pulumi/ && pulumi up --stack prod --config-file Pulumi.prod.yaml)
+kubectl get pods -n prod-metrik -o jsonpath='{.items[*].spec.containers[*].image}'
+```
+
+### Pull-credential modes
+
+A stack uses one of three modes. The mode applies to every release in the stack.
+
+| Mode | Stack keys | Effect |
+| :--- | :--- | :--- |
+| a (created) | `metrik:registryServer`, `metrik:registryUsername`, `metrik:registryPassword` (secret) | Pulumi creates a `registry-credentials` pull secret in each release namespace and references it |
+| b (existing) | `metrik:imagePullSecret: <name>` | Releases reference a pull secret that already exists in each namespace |
+| c (none) | none of the above | No pull secret: public images, or nodes that pull with their own cloud identity |
+
+### When it fails
+
+- **Invalid configuration** fails at `pulumi preview`, before anything changes in the cluster,
+  naming the release or keys. Examples: an `image` without `tag`, a `repository` that contains a
+  tag or digest, a malformed `digest`, only some of the three credential keys, or both modes a
+  and b.
+- **Images that cannot be pulled**, because of a wrong tag or bad credentials, fail the release
+  after 2 minutes with the release name (`prod-metrik`) in the error. Inspect the pod events with
+  `kubectl describe pod -n prod-metrik`.
+
+## Published images
+
+The `images` workflow (`.github/workflows/images.yaml`) builds both images with ko for
+`linux/amd64` and `linux/arm64`:
+
+| Event | Lint + test | Build | Push | Tags |
+| :--- | :--- | :--- | :--- | :--- |
+| Pull request | yes | yes | no | none |
+| Push to `main` | yes, must pass | yes | yes | `sha-<7 hex>` |
+| Tag `vX.Y.Z` | no (reuses the `main` build) | no | tag only | `X.Y.Z`, same digest as `sha-<7 hex>` |
+| Any other tag, including `vX.Y.Z-rc.N` | no | no | no | none |
+
+- There is **no `latest` tag**, and no other tag that moves. To try a release candidate, pin its
+  commit's `sha-<7 hex>`.
+- A release tag only works on a commit that `main` already published. Otherwise the release job
+  fails with `image … not found`. Re-run it after the `main` run finishes.
+- Image tags and chart versions are independent. Stacks that pull from a registry always set the
+  image tag.
+- All images are kept, so any `sha-<7 hex>` stays deployable.
+- Tags named `sha256-<digest>.sig`, `.att` or `.sbom` are signatures, attestations and SBOMs
+  attached to an image, not image tags.
+- The packages are private. After the first publish, check the visibility once in each package's
+  settings on GitHub.
+
+### Verify an image
+
+Every image is signed keyless by the workflow, and carries signed SPDX SBOM attestations (on the
+multi-platform index and on each platform image):
+
+```shell
+ID='https://github.com/pdemagny/metrik/.github/workflows/images.yaml@refs/heads/main'
+ISSUER='https://token.actions.githubusercontent.com'
+cosign verify --certificate-identity "$ID" --certificate-oidc-issuer "$ISSUER" \
+  ghcr.io/pdemagny/metrik:0.1.0
+cosign verify-attestation --type spdxjson \
+  --certificate-identity "$ID" --certificate-oidc-issuer "$ISSUER" \
+  ghcr.io/pdemagny/metrik:0.1.0
+```
+
+Log in first (`crane auth login ghcr.io -u <user> --password-stdin`), since the packages are
+private.
+
+## Other registries
+
+The stack does not depend on ghcr.io. To use another registry, push the images there with ko,
+then change only `image.repository` and the credential keys. For example:
+
+```shell
+export KO_DOCKER_REPO=<registry prefix below>
+(cd apps/metrik/ && ko build ./cmd/metrik --base-import-paths --platform=linux/amd64,linux/arm64 -t 0.1.0)
+```
+
+Signing is up to you there: the workflow only signs what it publishes to ghcr.io.
+
+### Docker Hub
+
+- **Repository**: `docker.io/<user>/metrik`, so `KO_DOCKER_REPO=docker.io/<user>`.
+- **Mode a**: `registryServer: https://index.docker.io/v1/`, your username, and a read-only
+  [access token](https://docs.docker.com/security/for-developers/access-tokens/) as the password.
+  The token lasts until you revoke it.
+
+### Google Artifact Registry
+
+- **Repository**: `<region>-docker.pkg.dev/<project>/<repository>/metrik`.
+- **Preferred, mode c**: on GKE, give the node service account (or the Workload Identity of the
+  namespace) the *Artifact Registry Reader* role. No pull secret is needed.
+- **Mode a**: `registryServer: <region>-docker.pkg.dev`, `registryUsername: _json_key`, and a
+  service-account JSON key as the password. The key lasts until it is deleted, so rotate it.
+
+### Amazon ECR
+
+- **Repository**: `<account>.dkr.ecr.<region>.amazonaws.com/metrik`.
+- **Preferred, mode c**: on EKS, attach `AmazonEC2ContainerRegistryReadOnly` to the node role.
+  No pull secret is needed.
+- **Mode a only for short tests**: `registryUsername: AWS`, and the password from
+  `aws ecr get-login-password`. **It expires after 12 hours**, after which new pods fail to pull.
+  Nothing refreshes it automatically.
 
 ## The Helm chart
 
@@ -199,7 +350,5 @@ for stack in dev prod; do
 done
 pulumi logout
 
-for cluster in dev prod; do
-    kind delete cluster --name "${cluster}"
-done
+kind delete cluster --name dev
 ```

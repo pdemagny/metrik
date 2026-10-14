@@ -24,7 +24,8 @@ API to monitor, Helm charts, and a Pulumi program to deploy everything to Kubern
 - **Safe by default**: TLS 1.2+, no redirect following, graceful shutdown, and containers running
   as non-root with a restricted security context.
 - **Deployment included**: a Helm chart per application, images built with
-  [ko](https://ko.build), [Pulumi](https://www.pulumi.com) stacks for `dev` and `prod`, and a
+  [ko](https://ko.build) and published signed to ghcr.io by CI, [Pulumi](https://www.pulumi.com)
+  stacks for `dev` (local kind) and `prod` (any cluster, any registry), and a
   [Skaffold](https://skaffold.dev) loop for in-cluster development.
 - **Demo API**: a small standalone service with live, slow and flaky readiness endpoints to
   practice on. It knows nothing about Metrik and is documented with an OpenAPI spec
@@ -84,7 +85,7 @@ To deploy to Kubernetes, see the [deployment guide](docs/metrik-deployment.md).
 | :---------------------------------------------- | :----------------------------------------------------------- |
 | [Architecture](docs/metrik-architecture.md)     | Components, check lifecycle, circuit breaker and delivery diagrams. |
 | [Configuration](docs/metrik-configuration.md)   | Every option with its default, flags, environment variables, log events. |
-| [Deployment](docs/metrik-deployment.md)         | Deploy to Kubernetes with Pulumi, Helm or Skaffold.          |
+| [Deployment](docs/metrik-deployment.md)         | Deploy locally on kind or to a remote cluster from a registry. |
 | [Roadmap](docs/metrik-roadmap.md)               | What is planned next.                                        |
 | [Contributing](docs/metrik-contributing.md)     | Conventions and the Spec Kit workflow.                       |
 
