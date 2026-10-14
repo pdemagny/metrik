@@ -21,6 +21,8 @@ type (
 		Chart          string
 		Version        string
 		ValueYamlFiles pulumi.AssetOrArchiveArray
+		Values         pulumi.Map
+		Timeout        int
 	}
 	options func(*args)
 	args    struct {
@@ -68,6 +70,14 @@ func WithValueYamlFiles(valueYamlFiles pulumi.AssetOrArchiveArray) options {
 	return func(a *args) { a.resourceArgs.ValueYamlFiles = valueYamlFiles }
 }
 
+func WithValues(values pulumi.Map) options {
+	return func(a *args) { a.resourceArgs.Values = values }
+}
+
+func WithTimeout(timeout int) options {
+	return func(a *args) { a.resourceArgs.Timeout = timeout }
+}
+
 func NewRelease(opts ...options) *args {
 	// Default values
 	obj := args{
@@ -111,6 +121,12 @@ func (a *args) Create() (*component, error) {
 		Chart:           u.Ps(a.resourceArgs.Chart),
 		Version:         u.Ps(a.resourceArgs.Version),
 		ValueYamlFiles:  a.resourceArgs.ValueYamlFiles,
+	}
+	if len(a.resourceArgs.Values) > 0 {
+		releaseArgs.Values = a.resourceArgs.Values
+	}
+	if a.resourceArgs.Timeout != 0 {
+		releaseArgs.Timeout = u.Pi(a.resourceArgs.Timeout)
 	}
 	a.ResourceOptions = append(a.ResourceOptions, pulumi.Aliases([]pulumi.Alias{{URN: pulumi.URN(fmt.Sprintf("urn:pulumi:%s::%s::%s::%s", a.Context.Stack(), a.Context.Project(), releaseResourceType, a.resourceArgs.Name))}}))
 	release, err := helm.NewRelease(a.Context, a.resourceArgs.Name, releaseArgs, a.ResourceOptions...)
