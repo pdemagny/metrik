@@ -18,6 +18,7 @@ with:
 ```shell
 mise run lint   # golangci-lint on every Go module
 mise run test   # go test -race on every Go module (needs a C compiler)
+MODULES=pulumi mise run lint   # only the listed modules
 ```
 
 Both must pass before a change is considered done. New or changed logic in `internal/` and `pkg/`

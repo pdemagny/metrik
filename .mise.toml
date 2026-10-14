@@ -18,10 +18,10 @@ skaffold = "2.25.0"
 jobs = 4
 
 [tasks.lint]
-description = "Lint every Go module (without golangci-lint's auto-fix)"
+description = "Lint every Go module, or those in $MODULES (without golangci-lint's auto-fix)"
 run = '''
 status=0
-for m in apps/demo-api apps/metrik pulumi; do
+for m in ${MODULES:-apps/demo-api apps/metrik pulumi}; do
   echo "==> $m"
   (cd "$m" && golangci-lint run --fix=false ./...) || status=1
 done
@@ -29,11 +29,11 @@ exit $status
 '''
 
 [tasks.test]
-description = "Run the Go tests of every module with the race detector"
+description = "Run the Go tests of every module, or those in $MODULES, with the race detector"
 env = { CGO_ENABLED = "1" }
 run = '''
 status=0
-for m in apps/demo-api apps/metrik pulumi; do
+for m in ${MODULES:-apps/demo-api apps/metrik pulumi}; do
   echo "==> $m"
   # Only packages with tests: ./... would also build every untested package (in pulumi, the
   # whole Kubernetes SDK) with -race, which lint already type-checks.
