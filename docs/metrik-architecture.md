@@ -78,14 +78,17 @@ stateDiagram-v2
 
 ```mermaid
 flowchart LR
-    Src["Go source"] -->|ko build| Img["Container image<br/>kind.local/metrik:0.1.0"]
-    Img -->|loaded into| Kind[("kind cluster<br/>dev or prod")]
+    Src["Go source"] -->|ko build, local| Img["Container image<br/>kind.local/metrik:0.1.0"]
+    Img -->|loaded into| Kind[("dev: kind cluster")]
+    Src -->|ko build, CI on main| Reg[("ghcr.io/pdemagny/metrik<br/>sha-&lt;short&gt;, X.Y.Z, signed")]
+    Reg -->|pulled by| Remote[("prod: remote cluster")]
     Stack["Pulumi stack<br/>Pulumi.dev.yaml / Pulumi.prod.yaml"] -->|pulumi up| Release["Helm releases"]
     Chart["Helm charts<br/>apps/*/deploy/chart"] --> Release
     Values["configs/*-values.yaml"] --> Release
     Release --> Kind
+    Release --> Remote
 
-    subgraph Kind
+    subgraph Cluster["Each cluster"]
         direction TB
         NS["Namespace<br/>(pod security: restricted)"]
         CM["ConfigMap metrik.yaml"]
@@ -98,6 +101,10 @@ flowchart LR
         NS --- Api
     end
 ```
+
+The image source is set per stack: `dev` takes the kind-loaded image from its values file, `prod`
+sets a registry image and pull credentials in `Pulumi.prod.yaml` (see
+[Deployment](metrik-deployment.md#remote-deployment-prod-from-a-registry)).
 
 Skaffold shortcuts this path during development: it builds with ko and deploys the same charts to
 the `kind-dev` cluster on every change.
