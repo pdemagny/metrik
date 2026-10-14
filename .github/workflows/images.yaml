@@ -85,6 +85,11 @@ jobs:
             ~/.cache/golangci-lint
           key: go-${{ steps.image.outputs.os }}-${{ matrix.module }}-${{ matrix.task }}-${{ hashFiles('.mise.toml', format('{0}/go.sum', matrix.module)) }}
           restore-keys: go-${{ steps.image.outputs.os }}-${{ matrix.module }}-${{ matrix.task }}-
+      # golangci-lint reports a failed download as a typecheck error: download first, with retries
+      # for the module proxy's transient failures.
+      - name: Download modules
+        working-directory: ${{ matrix.module }}
+        run: for i in 1 2 3; do go mod download && exit 0; sleep $((i * 10)); done; exit 1
       - run: mise run "${{ matrix.task }}"
       - name: Save Go caches
         if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true'
