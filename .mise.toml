@@ -35,7 +35,9 @@ run = '''
 status=0
 for m in apps/demo-api apps/metrik pulumi; do
   echo "==> $m"
-  (cd "$m" && go test -race -count=1 ./...) || status=1
+  # Only packages with tests: ./... would also build every untested package (in pulumi, the
+  # whole Kubernetes SDK) with -race, which lint already type-checks.
+  (cd "$m" && go test -race -count=1 $(go list -f '{% raw %}{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}{% endraw %}' ./...)) || status=1
 done
 exit $status
 '''
