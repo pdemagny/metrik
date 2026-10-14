@@ -63,7 +63,9 @@ Rationale: a health checker must never amplify an outage or leak resources while
   stacks (`dev`, `prod`); manual `kubectl apply`/`helm install` MUST NOT be the deployment path.
 - Images MUST be built with `ko`; containers MUST run as non-root with a restrictive
   `securityContext` and explicit resource requests/limits.
-- Tool versions MUST be pinned in `.mise.toml`, the single source of tool installation.
+- Tool versions MUST be pinned in `.mise.toml`, the single source of tool installation. CI
+  MUST install its tools through mise from `.mise.toml` as well, never through separate setup
+  actions.
 
 Rationale: dev and prod must be reproducible from the repository alone.
 
@@ -75,8 +77,15 @@ Rationale: dev and prod must be reproducible from the repository alone.
   contracts), `configs/` (configuration), and `deploy/` (Helm chart).
 - CLI: `cobra`; logging: `zap`; HTTP API contract: OpenAPI spec at `apps/demo-api/api/openapi.json`,
   which MUST be updated in the same change as any API route or payload change.
-- Packaging: `ko` images, Helm charts; orchestration: Kubernetes (kind clusters `dev` and
-  `prod` for local demos); IaC: Pulumi (Go).
+- Packaging: `ko` images, Helm charts; orchestration: Kubernetes; IaC: Pulumi (Go).
+- Environments: the `dev` stack runs on a local kind cluster with images loaded onto its nodes;
+  the `prod` stack runs on a remote Kubernetes cluster and pulls images from a registry
+  (ghcr.io). The registry, image and pull credentials MUST be set only in the Pulumi stack
+  configuration, never in chart templates or application code.
+- Image publishing: the GitHub Actions workflow `.github/workflows/images.yaml` lints, tests,
+  builds with `ko`, and publishes multi-arch, keyless-signed images with SBOM attestations to
+  ghcr.io. Tags MUST be immutable: `sha-<short>` from `main`, `X.Y.Z` promoted from that build on
+  release, and never `latest`.
 - Inner dev loop: `air` for local live reload, `skaffold dev` for in-cluster iteration.
 - The README MUST stay accurate for setup, configuration, and run instructions; a change that
   alters any of these MUST update the README in the same change.
@@ -104,4 +113,4 @@ Rationale: dev and prod must be reproducible from the repository alone.
 - Every plan (`/speckit-plan`) MUST include a Constitution Check; any violation MUST be recorded
   with justification in the plan's Complexity Tracking, or the design changed.
 
-**Version**: 1.2.3 | **Ratified**: 2026-09-30 | **Last Amended**: 2026-10-11
+**Version**: 1.3.0 | **Ratified**: 2026-09-30 | **Last Amended**: 2026-10-14
