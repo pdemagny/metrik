@@ -96,6 +96,7 @@ linters:
             - metrik/pkg
             - metrik/internal
             - demo-api/internal
+            - pulumi/internal/stack
             - pulumi/internal/utils
             - pulumi/pkg/helm/release
           deny:
