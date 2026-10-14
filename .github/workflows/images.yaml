@@ -1,0 +1,145 @@
+name: images
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+env:
+  KO_DOCKER_REPO: ghcr.io/pdemagny
+  # The release job only promotes images signed by this workflow on main.
+  SIGNER_IDENTITY: https://github.com/pdemagny/metrik/.github/workflows/images.yaml@refs/heads/main
+  SIGNER_ISSUER: https://token.actions.githubusercontent.com
+  # Install only the tools each job asks for, never the whole .mise.toml.
+  MISE_TASK_RUN_AUTO_INSTALL: "false"
+
+jobs:
+  check:
+    if: github.ref_type != 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
+        with:
+          install_args: go golangci-lint
+          cache: true
+      - run: mise run lint
+      - run: mise run test
+
+  # Pull requests: prove both images build, with a read-only token and no push.
+  build:
+    needs: check
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [metrik, demo-api]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
+        with:
+          install_args: go ko
+          cache: true
+      - name: Build
+        working-directory: apps/${{ matrix.app }}
+        env:
+          APP: ${{ matrix.app }}
+        run: |
+          ko build "./cmd/${APP}" --base-import-paths \
+            --platform=linux/amd64,linux/arm64 --push=false
+
+  # main: push sha-<short>, attest the SBOMs and sign.
+  publish:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [metrik, demo-api]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
+        with:
+          install_args: go ko cosign crane
+          cache: true
+      - name: Log in to ghcr.io
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "${TOKEN}" | ko login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+      - name: Build and push
+        id: push
+        working-directory: apps/${{ matrix.app }}
+        env:
+          APP: ${{ matrix.app }}
+        run: |
+          # --tags replaces ko's default "latest".
+          ref=$(ko build "./cmd/${APP}" --base-import-paths \
+            --platform=linux/amd64,linux/arm64 --tags "sha-${GITHUB_SHA::7}" \
+            --sbom=spdx --sbom-dir "${RUNNER_TEMP}/sbom")
+          echo "image=${KO_DOCKER_REPO}/${APP}@${ref##*@}" >> "${GITHUB_OUTPUT}"
+      - name: Attest SBOMs
+        env:
+          APP: ${{ matrix.app }}
+          IMAGE: ${{ steps.push.outputs.image }}
+        run: |
+          sbom="${RUNNER_TEMP}/sbom/${APP}"
+          cosign attest --yes --type spdxjson --predicate "${sbom}-index.spdx.json" "${IMAGE}"
+          for arch in amd64 arm64; do
+            digest=$(crane manifest "${IMAGE}" |
+              jq -r --arg arch "${arch}" '.manifests[] | select(.platform.architecture == $arch) | .digest')
+            cosign attest --yes --type spdxjson --predicate "${sbom}-linux-${arch}.spdx.json" \
+              "${IMAGE%@*}@${digest}"
+          done
+      - name: Sign
+        env:
+          IMAGE: ${{ steps.push.outputs.image }}
+        run: cosign sign --yes --recursive "${IMAGE}"
+
+  # vX.Y.Z: tag the signed sha-<short> images of that commit, no rebuild.
+  release:
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [metrik, demo-api]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
+        with:
+          install_args: cosign crane
+          cache: true
+      - name: Log in to ghcr.io
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "${TOKEN}" | crane auth login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+      - name: Promote
+        env:
+          APP: ${{ matrix.app }}
+        run: |
+          if ! [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "${GITHUB_REF_NAME} is not a release tag, nothing to publish"
+            exit 0
+          fi
+          repo="${KO_DOCKER_REPO}/${APP}"
+          source="${repo}:sha-${GITHUB_SHA::7}"
+          if ! digest=$(crane digest "${source}"); then
+            echo "::error::image ${source} not found; wait for the main run of ${GITHUB_SHA} and re-run"
+            exit 1
+          fi
+          cosign verify --certificate-identity "${SIGNER_IDENTITY}" \
+            --certificate-oidc-issuer "${SIGNER_ISSUER}" "${repo}@${digest}" > /dev/null
+          crane tag "${repo}@${digest}" "${GITHUB_REF_NAME#v}"
