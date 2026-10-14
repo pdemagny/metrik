@@ -22,7 +22,7 @@ jobs:
   # push. A change to the tools, the lint config or this workflow touches every module.
   changes:
     if: github.ref_type != 'tag'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       modules: ${{ steps.diff.outputs.modules }}
       apps: ${{ steps.diff.outputs.apps }}
@@ -55,7 +55,7 @@ jobs:
   check:
     needs: changes
     if: needs.changes.outputs.modules != '[]'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -96,7 +96,7 @@ jobs:
   build:
     needs: [changes, check]
     if: github.event_name == 'pull_request' && needs.changes.outputs.apps != '[]'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -122,7 +122,7 @@ jobs:
     if: >-
       !cancelled() && !contains(needs.*.result, 'failure')
       && github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       packages: write
@@ -173,7 +173,7 @@ jobs:
   # vX.Y.Z: tag the signed sha-<short> images of that commit, no rebuild.
   release:
     if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       packages: write
