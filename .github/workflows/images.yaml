@@ -71,6 +71,10 @@ jobs:
           cache: true
       # Compiling the dependencies is most of the run: keep the module and build caches. Only
       # main saves them, so pull requests reuse its caches without filling the repository quota.
+      # The key carries the runner image: cgo builds (-race, net) depend on its C compiler.
+      - name: Runner image
+        id: image
+        run: echo "os=${ImageOS}" >> "${GITHUB_OUTPUT}"
       - name: Restore Go caches
         id: cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -79,8 +83,8 @@ jobs:
             ~/go/pkg/mod
             ~/.cache/go-build
             ~/.cache/golangci-lint
-          key: go-${{ matrix.module }}-${{ matrix.task }}-${{ hashFiles('.mise.toml', format('{0}/go.sum', matrix.module)) }}
-          restore-keys: go-${{ matrix.module }}-${{ matrix.task }}-
+          key: go-${{ steps.image.outputs.os }}-${{ matrix.module }}-${{ matrix.task }}-${{ hashFiles('.mise.toml', format('{0}/go.sum', matrix.module)) }}
+          restore-keys: go-${{ steps.image.outputs.os }}-${{ matrix.module }}-${{ matrix.task }}-
       - run: mise run "${{ matrix.task }}"
       - name: Save Go caches
         if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true'
