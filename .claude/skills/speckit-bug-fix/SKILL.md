@@ -4,8 +4,12 @@ description: Apply the remediation from a bug assessment and record what was cha
 compatibility: Requires spec-kit project structure with .specify/ directory
 metadata:
   author: spec-kit-core
-  source: bug:commands/speckit.bug.fix.md
+  source: extension:bug
+user-invocable: true
+disable-model-invocation: false
 ---
+
+# Bug Fix Skill
 
 # Fix Bug
 

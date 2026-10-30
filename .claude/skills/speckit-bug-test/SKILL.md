@@ -1,11 +1,16 @@
 ---
 name: speckit-bug-test
-description: Validate that a previously fixed bug is resolved and record the verification report
+description: Validate that a previously fixed bug is resolved and record the verification
+  report
 compatibility: Requires spec-kit project structure with .specify/ directory
 metadata:
   author: spec-kit-core
-  source: bug:commands/speckit.bug.test.md
+  source: extension:bug
+user-invocable: true
+disable-model-invocation: false
 ---
+
+# Bug Test Skill
 
 # Test Bug Fix
 

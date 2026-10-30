@@ -1,11 +1,16 @@
 ---
 name: speckit-bug-assess
-description: Assess a bug report (pasted text or URL) against the codebase and produce an assessment with possible remediation
+description: Assess a bug report (pasted text or URL) against the codebase and produce
+  an assessment with possible remediation
 compatibility: Requires spec-kit project structure with .specify/ directory
 metadata:
   author: spec-kit-core
-  source: bug:commands/speckit.bug.assess.md
+  source: extension:bug
+user-invocable: true
+disable-model-invocation: false
 ---
+
+# Bug Assess Skill
 
 # Assess Bug
 
