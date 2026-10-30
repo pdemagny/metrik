@@ -11,7 +11,7 @@ ko = "0.19.1"
 kubectl = "1.37.1"
 kubectx = "0.11.0"
 pulumi = "3.267.0"
-"pypi:specify-cli" = "1.0.13"
+"pypi:specify-cli" = "1.2.5"
 skaffold = "2.25.0"
 
 [settings]
