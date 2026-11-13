@@ -1,7 +1,7 @@
 config:
   global:debug: false
   global:enableComponentResources: true
-  kubernetes:context: gke_floci-local_europe-west1_dev-gke-1
+  kubernetes:context: <your remote cluster context>
   metrik:registryServer: ghcr.io
   metrik:registryUsername: pdemagny
   metrik:releases:
