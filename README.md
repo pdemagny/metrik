@@ -1,5 +1,10 @@
 # Metrik
 
+[![images](https://github.com/pdemagny/metrik/actions/workflows/images.yaml/badge.svg?branch=main)](https://github.com/pdemagny/metrik/actions/workflows/images.yaml)
+[![Go version](https://img.shields.io/github/go-mod/go-version/pdemagny/metrik?filename=apps%2Fmetrik%2Fgo.mod)](https://github.com/pdemagny/metrik/blob/main/apps/metrik/go.mod)
+[![Release](https://img.shields.io/github/v/tag/pdemagny/metrik?sort=semver&label=release)](https://github.com/pdemagny/metrik/tags)
+[![License: MIT](https://img.shields.io/github/license/pdemagny/metrik)](https://github.com/pdemagny/metrik/blob/main/LICENSE)
+
 Metrik is an automated health checker for web applications. It probes HTTP health endpoints at a
 regular interval, measures response time and status, understands application-level health
 indicators in the response body, and raises alerts when something degrades. It ships with a Demo
