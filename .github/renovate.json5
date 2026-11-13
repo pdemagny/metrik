@@ -1,0 +1,119 @@
+// Renovate runs weekly from .github/workflows/renovate.yaml (self-hosted, no app).
+// Every update lands in one group per part of the repository, so a week brings a handful of PRs.
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+    // One run a week: the default hourly limit (2) would hold most groups back to the next week.
+    ':disableRateLimiting',
+  ],
+  timezone: 'Europe/Paris',
+  labels: ['dependencies'],
+  // Conventional commits, type(scope): the scope names the group (see packageRules).
+  semanticCommits: 'enabled',
+  semanticCommitType: 'chore',
+  // A release gets a few days to be yanked before it is proposed.
+  minimumReleaseAge: '5 days',
+  // Each module is independent: tidy the updated one; majors rewrite the import paths.
+  postUpdateOptions: ['gomodTidy', 'gomodUpdateImportPaths'],
+  packageRules: [
+    // Go modules: one group per module of the repository.
+    {
+      description: 'The metrik app module.',
+      matchManagers: ['gomod'],
+      matchFileNames: ['apps/metrik/go.mod'],
+      groupName: 'metrik go modules',
+      groupSlug: 'go-metrik',
+      semanticCommitScope: 'metrik',
+      commitMessageTopic: 'go modules',
+    },
+    {
+      description: 'The Demo API module.',
+      matchManagers: ['gomod'],
+      matchFileNames: ['apps/demo-api/go.mod'],
+      groupName: 'demo-api go modules',
+      groupSlug: 'go-demo-api',
+      semanticCommitScope: 'demo-api',
+      commitMessageTopic: 'go modules',
+    },
+    {
+      description: 'The Pulumi program module (the Pulumi SDKs themselves are in the pulumi group).',
+      matchManagers: ['gomod'],
+      matchFileNames: ['pulumi/go.mod'],
+      groupName: 'pulumi program go modules',
+      groupSlug: 'go-pulumi',
+      semanticCommitScope: 'pulumi',
+      commitMessageTopic: 'go modules',
+    },
+    {
+      description: 'The docs site (Hugo theme module, repository root).',
+      matchManagers: ['gomod'],
+      matchFileNames: ['go.mod'],
+      groupName: 'docs go modules',
+      groupSlug: 'go-docs',
+      semanticCommitScope: 'docs',
+      commitMessageTopic: 'go modules',
+    },
+    {
+      description: 'Keep the go directives; the toolchain is pinned in .mise.toml.',
+      matchManagers: ['gomod'],
+      matchDepTypes: ['golang'],
+      enabled: false,
+    },
+
+    // Everything that is not a Go module.
+    {
+      description: 'The development tools pinned in .mise.toml.',
+      matchManagers: ['mise'],
+      groupName: 'mise tools',
+      groupSlug: 'mise-tools',
+      semanticCommitScope: 'tools',
+      commitMessageTopic: 'mise tools',
+    },
+    {
+      // A spec-kit upgrade also needs `specify integration upgrade claude` and a commit of the regenerated files.
+      description: 'spec-kit is upgraded by hand.',
+      matchManagers: ['mise'],
+      matchDepNames: ['pypi:specify-cli'],
+      enabled: false,
+    },
+
+    // Groups across managers: after the groups above, so they win.
+    {
+      description: 'The Pulumi SDKs and providers of the Pulumi program, and the Pulumi CLI they run with.',
+      matchManagers: ['gomod'],
+      matchPackageNames: ['github.com/pulumi/pulumi/**', 'github.com/pulumi/pulumi-*/**'],
+      groupName: 'pulumi',
+      groupSlug: 'pulumi',
+      semanticCommitScope: 'deps',
+      commitMessageTopic: 'pulumi',
+    },
+    {
+      matchManagers: ['mise'],
+      matchDepNames: ['pulumi'],
+      groupName: 'pulumi',
+      groupSlug: 'pulumi',
+      semanticCommitScope: 'deps',
+      commitMessageTopic: 'pulumi',
+    },
+    {
+      // The github-actions manager also reads the mise version jdx/mise-action installs.
+      description: 'The GitHub Actions, the mise of the workflows and Renovate itself.',
+      matchManagers: ['github-actions', 'custom.regex'],
+      groupName: 'ci',
+      groupSlug: 'ci',
+      semanticCommitScope: 'ci',
+      commitMessageTopic: 'workflow dependencies',
+    },
+  ],
+  customManagers: [
+    {
+      description: 'The Renovate version the renovate workflow runs.',
+      customType: 'regex',
+      managerFilePatterns: ['/^\\.github/workflows/renovate\\.yaml$/'],
+      matchStrings: ['renovate-version: (?<currentValue>\\S+)'],
+      depNameTemplate: 'ghcr.io/renovatebot/renovate',
+      datasourceTemplate: 'docker',
+    },
+  ],
+}
