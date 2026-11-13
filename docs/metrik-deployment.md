@@ -72,13 +72,17 @@ kubectl logs -n dev-metrik deploy/dev-metrik --follow
 
 ## Remote deployment (prod from a registry)
 
-`prod` deploys released images from the repository's private ghcr.io packages. See
+`prod` deploys released images from the repository's public ghcr.io packages. See
 [Published images](#published-images) for how they are built and tagged.
 
-### 1. Get a read credential
+### 1. Get a read credential (private packages only)
 
-Create a GitHub personal access token **(classic)** with only the `read:packages` scope. GitHub
-Packages does not accept fine-grained tokens for pulling images.
+The ghcr.io packages are public: pulling them needs no credential, so leave out the
+`metrik:registry*` keys below and skip this step ([mode c](#pull-credential-modes)).
+
+Images in private packages, for example published from a private fork, need a GitHub personal
+access token **(classic)** with only the `read:packages` scope. GitHub Packages does not accept
+fine-grained tokens for pulling images.
 
 ### 2. Configure the stack
 
@@ -87,8 +91,8 @@ Packages does not accept fine-grained tokens for pulling images.
 ```yaml
 config:
   kubernetes:context: <your remote cluster context>
-  metrik:registryServer: ghcr.io
-  metrik:registryUsername: <your GitHub user>
+  metrik:registryServer: ghcr.io           # private packages only
+  metrik:registryUsername: <your GitHub user>  # private packages only
   metrik:releases:
     - name: metrik
       namespace: metrik
@@ -101,7 +105,7 @@ config:
         # digest: sha256:...   # optional: pin the exact image
 ```
 
-Store the token encrypted in the stack, never in plain text:
+For private packages, store the token encrypted in the stack, never in plain text:
 
 ```shell
 (cd pulumi/ && pulumi config set --stack prod --secret metrik:registryPassword "<token>")
@@ -162,8 +166,8 @@ The `images` workflow (`.github/workflows/images.yaml`) builds both images with 
 - All images are kept, so any `sha-<7 hex>` stays deployable.
 - Tags named `sha256-<digest>.sig`, `.att` or `.sbom` are signatures, attestations and SBOMs
   attached to an image, not image tags.
-- The packages are private. After the first publish, check the visibility once in each package's
-  settings on GitHub.
+- The packages are public. A new package starts private: after its first publish, set its
+  visibility once in the package's settings on GitHub.
 
 ### Verify an image
 
@@ -179,9 +183,6 @@ cosign verify-attestation --type spdxjson \
   --certificate-identity "$ID" --certificate-oidc-issuer "$ISSUER" \
   ghcr.io/pdemagny/metrik:0.1.0
 ```
-
-Log in first (`crane auth login ghcr.io -u <user> --password-stdin`), since the packages are
-private.
 
 ## Other registries
 
