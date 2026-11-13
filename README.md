@@ -96,11 +96,19 @@ mise run docs:serve   # live preview on http://localhost:1313/metrik/
 mise run docs         # static build into public/
 ```
 
-## References
+## Acknowledgements
 
-- [logs](https://www.dash0.com/guides/logging-in-go-with-zap#triggering-actions-on-logs-with-hooks)
-- [requests](https://www.digitalocean.com/community/tutorials/how-to-make-http-requests-in-go#best-practices-for-production-http-clients)
-- [deamon](https://ieftimov.com/posts/four-steps-daemonize-your-golang-programs/#shut-down-on-sigtermsigint)
-- [health](https://github.com/hellofresh/health-go/blob/master/health.go#L192)
-- [api](https://mcorbin.fr/posts/2022-06-13-gin-golang/)
-- [otel](https://opentelemetry.io/docs/concepts/instrumentation/code-based/)
+These articles and projects shaped parts of Metrik:
+
+- [Logging in Go with Zap](https://www.dash0.com/guides/logging-in-go-with-zap#triggering-actions-on-logs-with-hooks)
+  (Dash0): the alert hook on log entries.
+- [How to make HTTP requests in Go](https://www.digitalocean.com/community/tutorials/how-to-make-http-requests-in-go#best-practices-for-production-http-clients)
+  (DigitalOcean): the production settings of the HTTP client.
+- [Four steps to daemonize your Go programs](https://ieftimov.com/posts/four-steps-daemonize-your-golang-programs/#shut-down-on-sigtermsigint)
+  (Ilija Eftimov): graceful shutdown on `SIGTERM` and `SIGINT`.
+- [health-go](https://github.com/hellofresh/health-go) (HelloFresh): the health indicators read
+  from the response body.
+- [Building an API with Gin](https://mcorbin.fr/posts/2022-06-13-gin-golang/) (Mathieu Corbin):
+  the Demo API.
+- [OpenTelemetry code-based instrumentation](https://opentelemetry.io/docs/concepts/instrumentation/code-based/):
+  the planned metrics (see the [roadmap](docs/metrik-roadmap.md)).
