@@ -22,7 +22,7 @@ implementation. The workflow and docs are validated by the runs in [quickstart.m
 
 ## Path Conventions
 
-Repository root: `/home/pierre/Projects/metrik`. Go modules: `apps/metrik`, `apps/demo-api` and
+Paths are relative to the repository root. Go modules: `apps/metrik`, `apps/demo-api` and
 `pulumi`. CI lives in `.github/workflows/`, and docs in `docs/`.
 
 ---
