@@ -38,6 +38,16 @@ declarative delivery) are written down in
 [`.specify/memory/constitution.md`](https://github.com/pdemagny/metrik/blob/main/.specify/memory/constitution.md).
 Every change, human or AI-written, is expected to respect them.
 
+## Releases
+
+[release-please](https://github.com/googleapis/release-please) keeps a release PR
+(`chore(main): release X.Y.Z`) open on `main`. It proposes the next version and its
+`CHANGELOG.md` section from the conventional commits since the last release: `fix` bumps the
+patch, `feat` the minor, and before 1.0 a breaking change (`!`) bumps the minor too. Merging the
+release PR tags `vX.Y.Z`, publishes the GitHub Release and the `X.Y.Z` images (see
+[Published images](metrik-deployment.md#published-images)). Configuration:
+`release-please-config.json` and `.release-please-manifest.json`.
+
 ## AI-assisted development
 
 ### Principles
