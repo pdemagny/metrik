@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cenkalti/backoff/v7"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 )
@@ -144,8 +145,11 @@ func TestRunVerdicts(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			case tt.wantErr == "*" && err == nil:
 				t.Fatal("expected an error, got nil")
-			case tt.wantErr != "" && tt.wantErr != "*" && (err == nil || err.Error() != tt.wantErr):
-				t.Fatalf("error = %v, want %q", err, tt.wantErr)
+			case tt.wantErr != "" && tt.wantErr != "*":
+				// Retry wraps every failure in a RetryError; the operation's error is its LastErr.
+				if re := backoff.AsRetryError(err); re == nil || re.LastErr == nil || re.LastErr.Error() != tt.wantErr {
+					t.Fatalf("error = %v, want last error %q", err, tt.wantErr)
+				}
 			}
 			if got := hits.Load(); got != tt.hits {
 				t.Errorf("attempts = %d, want %d", got, tt.hits)
