@@ -22,5 +22,6 @@ What is planned next. Items are not ordered and carry no dates.
 - Signed multi-arch images published to ghcr.io, and deployment from a registry
 - Faster CI checks: parallel lint and test jobs, only on changed modules, with Go caches
 - Releases through a release-please PR
+- Documentation website published on GitHub Pages
 
 Ideas and proposals are welcome: see [Contributing](metrik-contributing.md).
