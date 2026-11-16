@@ -154,13 +154,14 @@ The `images` workflow (`.github/workflows/images.yaml`) builds both images with 
 | :--- | :--- | :--- | :--- | :--- |
 | Pull request | yes | yes | no | none |
 | Push to `main` | yes, must pass | yes | yes | `sha-<7 hex>` |
-| Tag `vX.Y.Z` | no (reuses the `main` build) | no | tag only | `X.Y.Z`, same digest as `sha-<7 hex>` |
-| Any other tag, including `vX.Y.Z-rc.N` | no | no | no | none |
+| Release `vX.Y.Z` | no (reuses the `main` build) | no | tag only | `X.Y.Z`, same digest as `sha-<7 hex>` |
 
+- Releases come from the release PR (see [Releases](metrik-contributing.md#releases)). Once
+  `main` has published the commit that merges it, the `release` workflow
+  (`.github/workflows/release.yaml`, called by `images`) tags it `vX.Y.Z` and adds the `X.Y.Z`
+  tag to its signed images. A tag pushed by hand publishes nothing.
 - There is **no `latest` tag**, and no other tag that moves. To try a release candidate, pin its
   commit's `sha-<7 hex>`.
-- A release tag only works on a commit that `main` already published. Otherwise the release job
-  fails with `image … not found`. Re-run it after the `main` run finishes.
 - Image tags and chart versions are independent. Stacks that pull from a registry always set the
   image tag.
 - All images are kept, so any `sha-<7 hex>` stays deployable.
