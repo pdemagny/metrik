@@ -1,6 +1,7 @@
 # Metrik
 
 [![images](https://github.com/pdemagny/metrik/actions/workflows/images.yaml/badge.svg?branch=main)](https://github.com/pdemagny/metrik/actions/workflows/images.yaml)
+[![docs](https://github.com/pdemagny/metrik/actions/workflows/docs.yaml/badge.svg?branch=main)](https://pdemagny.github.io/metrik/)
 [![Go version](https://img.shields.io/github/go-mod/go-version/pdemagny/metrik?filename=apps%2Fmetrik%2Fgo.mod)](https://github.com/pdemagny/metrik/blob/main/apps/metrik/go.mod)
 [![Release](https://img.shields.io/github/v/tag/pdemagny/metrik?sort=semver&label=release)](https://github.com/pdemagny/metrik/tags)
 [![License: MIT](https://img.shields.io/github/license/pdemagny/metrik)](https://github.com/pdemagny/metrik/blob/main/LICENSE)
