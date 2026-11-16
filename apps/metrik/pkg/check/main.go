@@ -87,7 +87,7 @@ func (c *Check) Run(ctx context.Context, logger *zap.Logger, client *http.Client
 		if response.StatusCode == http.StatusTooManyRequests {
 			seconds, err := strconv.ParseInt(response.Header.Get("Retry-After"), 10, 64)
 			if err == nil {
-				return c, backoff.RetryAfter(int(seconds))
+				return c, backoff.RetryAfter(time.Duration(seconds)*time.Second, errors.New("too many requests"))
 			}
 		}
 

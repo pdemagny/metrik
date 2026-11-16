@@ -88,7 +88,7 @@ linters:
             - github.com/spf13/cobra
             - github.com/spf13/pflag
             - github.com/spf13/viper
-            - github.com/cenkalti/backoff/v5
+            - github.com/cenkalti/backoff/v7
             - github.com/fsnotify/fsnotify
             - github.com/kr/pretty
             - go.uber.org/zap
