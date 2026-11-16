@@ -94,7 +94,9 @@ To deploy to Kubernetes, see the [deployment guide](docs/metrik-deployment.md).
 | [Roadmap](docs/metrik-roadmap.md)               | What is planned next.                                        |
 | [Contributing](docs/metrik-contributing.md)     | Conventions and the Spec Kit workflow.                       |
 
-The same documentation is available as a website, built with [Hugo](https://gohugo.io):
+The same documentation is published as a website on
+[pdemagny.github.io/metrik](https://pdemagny.github.io/metrik/), built with
+[Hugo](https://gohugo.io):
 
 ```shell
 mise run docs:serve   # live preview on http://localhost:1313/metrik/
